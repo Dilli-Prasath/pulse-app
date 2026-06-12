@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+* { -webkit-tap-highlight-color: transparent; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #e8eefc;
+  background:
+    radial-gradient(1100px 700px at 12% -8%, rgba(139,92,255,.18), transparent 55%),
+    radial-gradient(900px 650px at 105% 8%, rgba(34,227,255,.14), transparent 50%),
+    radial-gradient(800px 700px at 50% 120%, rgba(255,79,216,.10), transparent 55%),
+    #06080f;
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(120,160,255,.18); border-radius: 10px; }
+::selection { background: rgba(34,227,255,.3); }
+
+input, select, textarea, button { font-family: inherit; }
+
+/* utility component classes */
+@layer components {
+  .card {
+    @apply bg-panel border border-line rounded-[18px] p-5 relative overflow-hidden;
+    backdrop-filter: blur(16px);
+  }
+  .card-glow::before {
+    content: "";
+    @apply absolute top-0 left-0 right-0 h-px bg-grad opacity-70;
+  }
+  .input {
+    @apply w-full bg-[rgba(6,8,15,.6)] border border-line2 text-txt px-3 py-2.5 rounded-xl text-sm outline-none transition;
+  }
+  .input:focus { @apply border-cyan; box-shadow: 0 0 0 3px rgba(34,227,255,.12); }
+  .label { @apply text-[11px] uppercase tracking-wider text-muted font-bold block mb-1.5; }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-bold text-sm px-4 py-2.5 rounded-xl
+           border border-line2 bg-[rgba(120,160,255,.06)] text-txt transition cursor-pointer;
+  }
+  .btn:hover { @apply bg-[rgba(120,160,255,.13)] -translate-y-px; }
+  .btn-primary { @apply bg-grad border-0 text-white shadow-glowViolet; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-sm { @apply px-3 py-2 text-xs rounded-lg; }
+  .btn-danger { @apply text-red border-[rgba(255,93,122,.3)]; }
+  .chip {
+    @apply px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold cursor-pointer border border-line2 text-muted bg-transparent transition;
+  }
+  .chip-on { @apply bg-grad text-white border-transparent; }
+  .h3 { @apply text-[13px] uppercase tracking-wider text-muted font-bold; }
+  .tag { @apply text-[10.5px] font-bold uppercase tracking-wide px-2 py-1 rounded-md; }
+}
