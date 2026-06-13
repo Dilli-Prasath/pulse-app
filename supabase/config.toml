@@ -1,0 +1,9 @@
+# Supabase project config.
+# The api-ninjas function is called from the browser, so JWT verification must
+# be OFF — otherwise the CORS preflight (OPTIONS, which carries no auth header)
+# is rejected before our handler runs, which is the "preflight … does not have
+# HTTP ok status" error. The function only proxies non-sensitive fitness data
+# and keeps the real API keys server-side as secrets.
+
+[functions.api-ninjas]
+verify_jwt = false

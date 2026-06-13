@@ -2,9 +2,13 @@ import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { Card, Modal, PageHeader, Empty } from '../components/ui'
 import { ExerciseImage } from '../components/ExerciseImage'
+import { Combobox } from '../components/Combobox'
+import { EXERCISE_LIBRARY } from '../lib/exerciseLibrary'
 import { uid, today } from '../lib/seed'
 import { RoutineExercise } from '../lib/types'
 import { Trash2, Play } from 'lucide-react'
+
+const EX_NAMES = [...new Set(EXERCISE_LIBRARY.map((e) => e.name))].sort()
 
 export default function Routines() {
   const d = useStore((s) => s.data)
@@ -74,8 +78,8 @@ function RoutineModal({ onClose, onSave }: { onClose: () => void; onSave: (r: an
         <label className="label">Exercises</label>
         {rows.map((r) => (
           <div key={r.id} className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 56px 56px 32px' }}>
-            <input className="input" placeholder="Exercise" value={r.name}
-              onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, name: e.target.value } : x))} />
+            <Combobox value={r.name} placeholder="Search exercise…" options={EX_NAMES}
+              onChange={(v) => setRows(rows.map((x) => x.id === r.id ? { ...x, name: v } : x))} />
             <input className="input" type="number" value={r.sets} title="sets"
               onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, sets: +e.target.value } : x))} />
             <input className="input" type="number" value={r.reps} title="reps"

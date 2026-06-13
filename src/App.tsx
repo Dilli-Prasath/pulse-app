@@ -1,22 +1,25 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useStore } from './lib/store'
 import { applyAccent } from './lib/theme'
 import { Layout, Toast } from './components/Layout'
 import { AuthGate } from './components/AuthGate'
 import { Onboarding } from './components/Onboarding'
-import Dashboard from './pages/Dashboard'
-import Workouts from './pages/Workouts'
-import Programs from './pages/Programs'
-import Nutrition from './pages/Nutrition'
-import Recipes from './pages/Recipes'
-import Body from './pages/Body'
-import Routines from './pages/Routines'
-import Library from './pages/Library'
-import Coach from './pages/Coach'
-import Friends from './pages/Friends'
-import Profile from './pages/Profile'
-import Settings from './pages/Settings'
+
+// Route-level code splitting — each page is its own chunk, so the heavy
+// chart/page code only loads when that route is opened (smaller initial load).
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Workouts = lazy(() => import('./pages/Workouts'))
+const Programs = lazy(() => import('./pages/Programs'))
+const Nutrition = lazy(() => import('./pages/Nutrition'))
+const Recipes = lazy(() => import('./pages/Recipes'))
+const Body = lazy(() => import('./pages/Body'))
+const Routines = lazy(() => import('./pages/Routines'))
+const Library = lazy(() => import('./pages/Library'))
+const Coach = lazy(() => import('./pages/Coach'))
+const Friends = lazy(() => import('./pages/Friends'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Settings = lazy(() => import('./pages/Settings'))
 
 function Splash() {
   return (
@@ -43,6 +46,7 @@ export default function App() {
 
   return (
     <Layout>
+      <Suspense fallback={<div className="py-20 text-center text-muted text-sm">Loading…</div>}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/workouts" element={<Workouts />} />
@@ -58,6 +62,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Dashboard />} />
       </Routes>
+      </Suspense>
     </Layout>
   )
 }

@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { Card, Stat, Modal, Empty, Tag, PageHeader } from '../components/ui'
 import { ExerciseImage } from '../components/ExerciseImage'
+import { Combobox } from '../components/Combobox'
+import { EXERCISE_LIBRARY } from '../lib/exerciseLibrary'
 import { totalVolume, prs, workoutsThisWeek, streak, fmtDate, latestWeight } from '../lib/calcs'
 import { today, uid } from '../lib/seed'
 import { caloriesBurned, ninjaConfigured } from '../lib/apiNinjas'
@@ -10,6 +12,8 @@ import { WorkoutType, Exercise } from '../lib/types'
 import { Trash2, Loader2, Flame } from 'lucide-react'
 
 interface ExRow { id: string; name: string; setsReps: string; weight: string }
+
+const EXERCISE_NAMES = [...new Set(EXERCISE_LIBRARY.map((e) => e.name))].sort()
 
 export default function Workouts() {
   const d = useStore((s) => s.data)
@@ -143,8 +147,8 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
             {rows.map((r) => (
               <div key={r.id} className="grid gap-2 mb-2 items-center" style={{ gridTemplateColumns: r.name.trim() ? '40px 1fr 90px 70px 32px' : '1fr 90px 70px 32px' }}>
                 {r.name.trim() && <ExerciseImage name={r.name} size={40} />}
-                <input className="input" placeholder="Exercise" value={r.name}
-                  onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, name: e.target.value } : x))} />
+                <Combobox value={r.name} placeholder="Search exercise…" options={EXERCISE_NAMES}
+                  onChange={(v) => setRows(rows.map((x) => x.id === r.id ? { ...x, name: v } : x))} />
                 <input className="input" placeholder="3x10" value={r.setsReps}
                   onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, setsReps: e.target.value } : x))} />
                 <input className="input" type="number" placeholder="kg" value={r.weight}
