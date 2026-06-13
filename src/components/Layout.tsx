@@ -1,5 +1,5 @@
-import { ReactNode } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { NavLink, useLocation, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Dumbbell, Apple, LineChart, Users, ListChecks, Sparkles, User2,
   Cloud, CloudOff, RefreshCw, BookOpen, ChefHat, Settings as SettingsIcon, Target,
@@ -43,10 +43,26 @@ export function Toast() {
   )
 }
 
-export function Layout({ children }: { children: ReactNode }) {
+const LAST_ROUTE_KEY = 'pulse_last_route'
+
+export function Layout() {
   const loc = useLocation()
+  const nav = useNavigate()
   const name = useStore((s) => s.data.profile.name)
   const avatar = useStore((s) => s.data.profile.avatar)
+  const restored = useRef(false)
+
+  // Remember the user's location and restore it on a fresh app open.
+  useEffect(() => {
+    if (restored.current) return
+    restored.current = true
+    const saved = localStorage.getItem(LAST_ROUTE_KEY)
+    if (loc.pathname === '/' && saved && saved !== '/') nav(saved, { replace: true })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (loc.pathname && loc.pathname !== '/') localStorage.setItem(LAST_ROUTE_KEY, loc.pathname)
+  }, [loc.pathname])
 
   return (
     <div className="flex min-h-screen">
@@ -83,7 +99,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-9 py-5 sm:py-6 pb-28 md:pb-20 max-w-[1320px] w-full mx-auto">
-        <div key={loc.pathname} className="animate-fade">{children}</div>
+        <div key={loc.pathname} className="animate-fade"><Outlet /></div>
       </main>
 
       {/* Mobile nav — horizontally scrollable so every page is reachable */}

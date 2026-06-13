@@ -20,6 +20,7 @@ const Coach = lazy(() => import('./pages/Coach'))
 const Friends = lazy(() => import('./pages/Friends'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 function Splash() {
   return (
@@ -45,24 +46,25 @@ export default function App() {
   if (!data.profile.onboarded) return (<><Onboarding /><Toast /></>)
 
   return (
-    <Layout>
-      <Suspense fallback={<div className="py-20 text-center text-muted text-sm">Loading…</div>}>
+    <Suspense fallback={<div className="py-20 text-center text-muted text-sm">Loading…</div>}>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/workouts" element={<Workouts />} />
-        <Route path="/programs" element={<Programs />} />
-        <Route path="/nutrition" element={<Nutrition />} />
-        <Route path="/recipes" element={<Recipes />} />
-        <Route path="/body" element={<Body />} />
-        <Route path="/routines" element={<Routines />} />
-        <Route path="/library" element={<Library />} />
-        <Route path="/coach" element={<Coach />} />
-        <Route path="/friends" element={<Friends />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Dashboard />} />
+        {/* Layout route — shared chrome (sidebar, nav) wraps every page via <Outlet/> */}
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="workouts" element={<Workouts />} />
+          <Route path="programs" element={<Programs />} />
+          <Route path="nutrition" element={<Nutrition />} />
+          <Route path="recipes" element={<Recipes />} />
+          <Route path="body" element={<Body />} />
+          <Route path="routines" element={<Routines />} />
+          <Route path="library" element={<Library />} />
+          <Route path="coach" element={<Coach />} />
+          <Route path="friends" element={<Friends />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
       </Routes>
-      </Suspense>
-    </Layout>
+    </Suspense>
   )
 }
