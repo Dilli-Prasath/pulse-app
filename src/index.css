@@ -2,9 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  --grad: linear-gradient(135deg, #22e3ff, #8b5cff 55%, #ff4fd8);
+  --glow: rgba(139, 92, 255, .45);
+}
 
 * { -webkit-tap-highlight-color: transparent; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 html, body, #root { height: 100%; }
 

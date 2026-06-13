@@ -12,6 +12,24 @@ export interface Profile {
   activity: number
   goalRate: number
   avatar: string
+  onboarded: boolean
+  /** id of the active goal program (see programs.ts), if chosen. */
+  programId?: string
+}
+
+export type Level = 'Beginner' | 'Intermediate' | 'Advanced'
+
+/** A body-composition reading, e.g. from an InBody scan. */
+export interface InBodyEntry {
+  id: string
+  date: string
+  weight?: number          // kg
+  bodyFatPct?: number      // %
+  skeletalMuscleMass?: number // kg (SMM)
+  visceralFat?: number     // level
+  bodyWaterPct?: number    // % total body water
+  bmr?: number             // kcal (basal metabolic rate from scan)
+  inbodyScore?: number     // points
 }
 
 export interface SetEntry { reps: number; weight: number }
@@ -69,6 +87,18 @@ export interface Achievement {
   check: (s: AppData) => boolean
 }
 
+export type Accent = 'aurora' | 'cyan' | 'violet' | 'sunset' | 'emerald'
+export type WeightUnit = 'kg' | 'lb'
+export type ExerciseSource = 'auto' | 'ninja' | 'wger'
+export type FoodSource = 'auto' | 'ninja' | 'off'
+
+export interface Settings {
+  accent: Accent
+  weightUnit: WeightUnit
+  exerciseSource: ExerciseSource
+  foodSource: FoodSource
+}
+
 export interface AppData {
   profile: Profile
   weights: WeightEntry[]
@@ -76,4 +106,6 @@ export interface AppData {
   meals: Meal[]
   friends: Friend[]
   routines: Routine[]
+  inbody: InBodyEntry[]
+  settings: Settings
 }

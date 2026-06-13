@@ -1,2 +1,11 @@
 node_modules
 package-lock.json
+
+# Local env
+.env
+.env.local
+
+# Build artifacts
+dist
+*.tsbuildinfo
+vite.config.*.timestamp-*.mjs

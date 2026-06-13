@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine } from './types'
-import { seed, uid } from './seed'
+import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings } from './types'
+import { emptyAccount, uid } from './seed'
 import { supabase, cloudConfigured, TABLE } from './supabase'
 import type { Session } from '@supabase/supabase-js'
 
-const LOCAL_KEY = 'pulse_fit_v2'
+const LOCAL_KEY = 'pulse_fit_v3'
 
 function loadLocal(): AppData {
   try {
@@ -13,17 +13,21 @@ function loadLocal(): AppData {
   } catch {
     /* ignore */
   }
-  return seed()
+  return emptyAccount()
 }
+
+/** Merge any stored document onto a fresh account so new fields always exist. */
 function migrate(d: Partial<AppData>): AppData {
-  const base = seed()
+  const base = emptyAccount()
   return {
     profile: { ...base.profile, ...(d.profile || {}) },
-    weights: d.weights ?? base.weights,
+    weights: d.weights ?? [],
     workouts: d.workouts ?? [],
     meals: d.meals ?? [],
-    friends: d.friends ?? base.friends,
-    routines: d.routines && d.routines.length ? d.routines : base.routines,
+    friends: d.friends ?? [],
+    routines: d.routines ?? [],
+    inbody: d.inbody ?? [],
+    settings: { ...base.settings, ...(d.settings || {}) },
   }
 }
 function saveLocal(d: AppData) {
@@ -37,6 +41,7 @@ interface StoreState {
   session: Session | null
   cloud: boolean
   sync: SyncState
+  authReady: boolean
   toast: string | null
 
   init: () => Promise<void>
@@ -48,6 +53,7 @@ interface StoreState {
   // auth
   signIn: (email: string, password: string) => Promise<string | null>
   signUp: (email: string, password: string) => Promise<string | null>
+  signInWithGoogle: () => Promise<string | null>
   signOut: () => Promise<void>
 
   // mutations
@@ -60,8 +66,13 @@ interface StoreState {
   addFriend: (f: Omit<Friend, 'id'>) => void
   delFriend: (id: string) => void
   saveProfile: (p: Partial<Profile>) => void
+  updateSettings: (s: Partial<Settings>) => void
+  completeOnboarding: (p: Partial<Profile>) => void
   addRoutine: (r: Omit<Routine, 'id'>) => void
   delRoutine: (id: string) => void
+  addInbody: (e: Omit<InBodyEntry, 'id'>) => void
+  importInbody: (rows: Omit<InBodyEntry, 'id'>[]) => void
+  delInbody: (id: string) => void
   resetAll: () => void
 }
 
@@ -72,6 +83,7 @@ export const useStore = create<StoreState>((set, get) => ({
   session: null,
   cloud: cloudConfigured,
   sync: cloudConfigured ? 'signedout' : 'local',
+  authReady: !cloudConfigured, // when offline, the app is immediately usable
   toast: null,
 
   showToast: (msg) => {
@@ -87,15 +99,18 @@ export const useStore = create<StoreState>((set, get) => ({
 
   init: async () => {
     if (!cloudConfigured || !supabase) {
-      set({ sync: 'local' })
+      set({ sync: 'local', authReady: true })
       return
     }
     const { data: { session } } = await supabase.auth.getSession()
     set({ session })
     if (session) await get().pullCloud()
+    set({ authReady: true })
     supabase.auth.onAuthStateChange((_e, s) => {
+      const had = get().session
       set({ session: s, sync: s ? 'synced' : 'signedout' })
-      if (s) void get().pullCloud()
+      if (s && !had) void get().pullCloud()
+      if (!s) set({ data: emptyAccount() })
     })
   },
 
@@ -109,7 +124,8 @@ export const useStore = create<StoreState>((set, get) => ({
       set({ data: migrate(data.data as AppData), sync: 'synced' })
       saveLocal(get().data)
     } else {
-      // first login: push current local data up
+      // Brand-new account: start clean, then create the cloud row.
+      set({ data: emptyAccount() })
       await get().pushCloud()
     }
     set({ sync: 'synced' })
@@ -133,9 +149,17 @@ export const useStore = create<StoreState>((set, get) => ({
     const { error } = await supabase.auth.signUp({ email, password })
     return error ? error.message : null
   },
+  signInWithGoogle: async () => {
+    if (!supabase) return 'Cloud not configured'
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    })
+    return error ? error.message : null
+  },
   signOut: async () => {
     if (supabase) await supabase.auth.signOut()
-    set({ session: null, sync: cloudConfigured ? 'signedout' : 'local' })
+    set({ session: null, sync: cloudConfigured ? 'signedout' : 'local', data: emptyAccount() })
   },
 
   update: (fn) => {
@@ -158,7 +182,21 @@ export const useStore = create<StoreState>((set, get) => ({
   addFriend: (f) => get().update((d) => { d.friends.push({ ...f, id: uid() }) }),
   delFriend: (id) => get().update((d) => { d.friends = d.friends.filter((x) => x.id !== id) }),
   saveProfile: (p) => get().update((d) => { d.profile = { ...d.profile, ...p } }),
+  updateSettings: (s) => get().update((d) => { d.settings = { ...d.settings, ...s } }),
+  completeOnboarding: (p) => get().update((d) => {
+    d.profile = { ...d.profile, ...p, onboarded: true }
+    if (p.startWeight && !d.weights.length) d.weights.push({ date: new Date().toISOString().slice(0, 10), kg: p.startWeight })
+  }),
   addRoutine: (r) => get().update((d) => { d.routines.push({ ...r, id: uid() }) }),
   delRoutine: (id) => get().update((d) => { d.routines = d.routines.filter((x) => x.id !== id) }),
-  resetAll: () => { const s = seed(); set({ data: s }); get().persist() },
+  addInbody: (e) => get().update((d) => {
+    d.inbody.push({ ...e, id: uid() })
+    d.inbody.sort((a, b) => a.date.localeCompare(b.date))
+  }),
+  importInbody: (rows) => get().update((d) => {
+    rows.forEach((r) => d.inbody.push({ ...r, id: uid() }))
+    d.inbody.sort((a, b) => a.date.localeCompare(b.date))
+  }),
+  delInbody: (id) => get().update((d) => { d.inbody = d.inbody.filter((x) => x.id !== id) }),
+  resetAll: () => { const s = emptyAccount(); set({ data: s }); get().persist() },
 }))

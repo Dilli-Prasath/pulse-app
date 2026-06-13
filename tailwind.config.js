@@ -24,11 +24,11 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        glowCyan: '0 0 22px rgba(34,227,255,.45)',
-        glowViolet: '0 0 22px rgba(139,92,255,.45)',
+        glowCyan: '0 0 22px var(--glow, rgba(34,227,255,.45))',
+        glowViolet: '0 0 22px var(--glow, rgba(139,92,255,.45))',
       },
       backgroundImage: {
-        grad: 'linear-gradient(135deg,#22e3ff,#8b5cff 55%,#ff4fd8)',
+        grad: 'var(--grad, linear-gradient(135deg,#22e3ff,#8b5cff 55%,#ff4fd8))',
       },
       keyframes: {
         fade: { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'none' } },

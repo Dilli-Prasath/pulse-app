@@ -46,24 +46,30 @@ export const BUILT_IN_ROUTINES = [
   },
 ]
 
-export function seed(): AppData {
-  const t = today()
+/**
+ * A brand-new, EMPTY account. No demo data — every value is filled in by the
+ * user through onboarding and by logging. `onboarded: false` triggers the
+ * onboarding wizard on first sign-in.
+ */
+export function emptyAccount(): AppData {
   return {
     profile: {
-      name: 'Dilli Prasath', sex: 'male', age: 28, heightCm: 188,
-      startWeight: 110, targetWeight: 88, activity: 1.375, goalRate: 0.5, avatar: '#8b5cff',
+      name: '', sex: 'male', age: 30, heightCm: 175,
+      startWeight: 0, targetWeight: 0, activity: 1.375, goalRate: 0.5,
+      avatar: '#8b5cff', onboarded: false,
     },
-    weights: [{ date: t, kg: 110 }],
+    weights: [],
     workouts: [],
     meals: [],
-    friends: [
-      { id: 'f1', name: 'Arjun', color: '#22e3ff', weeklyWorkouts: 4, streak: 11, weightLost: 6.2, caloriesAvg: 2150 },
-      { id: 'f2', name: 'Meera', color: '#ff4fd8', weeklyWorkouts: 5, streak: 23, weightLost: 9.1, caloriesAvg: 1820 },
-      { id: 'f3', name: 'Karthik', color: '#2bffb0', weeklyWorkouts: 2, streak: 3, weightLost: 2.4, caloriesAvg: 2400 },
-    ],
-    routines: BUILT_IN_ROUTINES.map((r) => ({ ...r })),
+    friends: [],
+    routines: [],
+    inbody: [],
+    settings: { accent: 'aurora', weightUnit: 'kg', exerciseSource: 'auto', foodSource: 'auto' },
   }
 }
+
+// Backwards-compatible alias used across the app.
+export const seed = emptyAccount
 
 // Common foods database (per typical serving)
 export interface FoodItem { name: string; serving: string; calories: number; protein: number; carbs: number; fat: number }

@@ -6,6 +6,7 @@ import {
   latestWeight, bmi, bmiLabel, caloriesOn, calorieTarget, workoutsThisWeek, streak,
   totalLost, goalProgress, macrosOn, proteinTarget, carbTarget, fatTarget, fmtDate, last7Days,
 } from '../lib/calcs'
+import { dispWeight, wLabel } from '../lib/units'
 
 export default function Dashboard() {
   const d = useStore((s) => s.data)
@@ -18,8 +19,9 @@ export default function Dashboard() {
   const tgt = calorieTarget(d)
   const lost = totalLost(d)
   const m = macrosOn(d, today)
+  const unit = d.settings.weightUnit
 
-  const weightData = d.weights.slice(-14).map((p) => ({ label: fmtDate(p.date), value: p.kg }))
+  const weightData = d.weights.slice(-14).map((p) => ({ label: fmtDate(p.date), value: dispWeight(p.kg, unit) }))
   const calData = last7Days().map((dt) => ({ label: fmtDate(dt), value: caloriesOn(d, dt) }))
 
   return (
@@ -32,8 +34,8 @@ export default function Dashboard() {
           <span className="w-1.5 h-1.5 rounded-full bg-green shadow-[0_0_10px_#2bffb0]" />{streak(d)} day streak</div>} />
 
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
-        <Stat label="Current Weight" value={w.toFixed(1)} unit="kg"
-          sub={<span className={lost >= 0 ? 'text-cyan' : 'text-amber'}>{lost >= 0 ? '▼' : '▲'} {Math.abs(lost)} kg from start</span>} />
+        <Stat label="Current Weight" value={dispWeight(w, unit).toFixed(1)} unit={wLabel(unit)}
+          sub={<span className={lost >= 0 ? 'text-cyan' : 'text-amber'}>{lost >= 0 ? '▼' : '▲'} {Math.abs(dispWeight(lost, unit))} {wLabel(unit)} from start</span>} />
         <Stat label="BMI" value={b.toFixed(1)} sub={<span style={{ color: bc }}>● {bl}</span>} />
         <Stat label="Workouts / week" value={workoutsThisWeek(d)} unit="sessions"
           sub={<span className="text-violet">⚡ {d.workouts.length} all-time</span>} />
@@ -41,15 +43,15 @@ export default function Dashboard() {
           sub={<span className={cals <= tgt ? 'text-green' : 'text-amber'}>{cals <= tgt ? 'On target' : 'Over budget'}</span>} />
       </div>
 
-      <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)' }}>
+      <div className="grid gap-4 mt-4 grid-cols-1 lg:grid-cols-[2fr_1fr]">
         <Card><div className="h3 mb-2">Weight Trajectory</div>
-          <LineArea data={weightData} color="#22e3ff" goal={d.profile.targetWeight} unit=" kg" /></Card>
+          <LineArea data={weightData} color="#22e3ff" goal={dispWeight(d.profile.targetWeight, unit)} unit={` ${wLabel(unit)}`} /></Card>
         <Card><div className="h3 mb-2">Goal Progress</div>
           <div className="flex flex-col items-center text-center mt-2">
             <Ring pct={goalProgress(d)} color="#8b5cff" label="to goal" center={`${goalProgress(d)}%`} />
             <div className="mt-3.5 text-[13px] text-muted">
-              <b className="text-txt">{d.profile.targetWeight} kg</b> target<br />
-              {(w - d.profile.targetWeight).toFixed(1)} kg to go</div>
+              <b className="text-txt">{dispWeight(d.profile.targetWeight, unit)} {wLabel(unit)}</b> target<br />
+              {dispWeight(w - d.profile.targetWeight, unit).toFixed(1)} {wLabel(unit)} to go</div>
           </div></Card>
       </div>
 

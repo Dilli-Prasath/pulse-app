@@ -6,7 +6,7 @@
  */
 
 const BASE = 'https://wger.de'
-const SEARCH = `${BASE}/api/v2/exercise/search/?language=english&format=json&term=`
+const SEARCH = `${BASE}/api/v2/exercise/search/?language=en&format=json&term=`
 const CACHE_KEY = 'pulse_ex_imgcache_v1'
 
 type Cache = Record<string, string> // exerciseName(lower) -> image url (or '' = none)

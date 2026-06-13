@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { Card, Stat, PageHeader, Modal } from '../components/ui'
 import { bmr, tdee, calorieTarget, weeksToGoal } from '../lib/calcs'
+import { dispWeight, toKg, wLabel } from '../lib/units'
 import { Sex } from '../lib/types'
 import { Cloud, LogOut } from 'lucide-react'
 
@@ -14,6 +15,7 @@ export default function Profile() {
   const [authOpen, setAuthOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [p, setP] = useState(d.profile)
+  const unit = d.settings.weightUnit
 
   function exportData() {
     const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
@@ -63,8 +65,8 @@ export default function Profile() {
 
         <Card><div className="h3 mb-3.5">Goal Settings</div>
           <div className="grid grid-cols-2 gap-3.5">
-            <div><label className="label">Start Weight (kg)</label><input className="input" type="number" step="0.1" value={p.startWeight} onChange={(e) => setP({ ...p, startWeight: +e.target.value })} /></div>
-            <div><label className="label">Target Weight (kg)</label><input className="input" type="number" step="0.1" value={p.targetWeight} onChange={(e) => setP({ ...p, targetWeight: +e.target.value })} /></div>
+            <div><label className="label">Start Weight ({wLabel(unit)})</label><input className="input" type="number" step="0.1" value={dispWeight(p.startWeight, unit)} onChange={(e) => setP({ ...p, startWeight: +toKg(+e.target.value, unit).toFixed(2) })} /></div>
+            <div><label className="label">Target Weight ({wLabel(unit)})</label><input className="input" type="number" step="0.1" value={dispWeight(p.targetWeight, unit)} onChange={(e) => setP({ ...p, targetWeight: +toKg(+e.target.value, unit).toFixed(2) })} /></div>
           </div>
           <div className="mt-3.5"><label className="label">Weekly Loss Rate</label>
             <select className="input" value={p.goalRate} onChange={(e) => setP({ ...p, goalRate: +e.target.value })}>

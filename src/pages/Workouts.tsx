@@ -3,10 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { Card, Stat, Modal, Empty, Tag, PageHeader } from '../components/ui'
 import { ExerciseImage } from '../components/ExerciseImage'
-import { totalVolume, prs, workoutsThisWeek, streak, fmtDate } from '../lib/calcs'
+import { totalVolume, prs, workoutsThisWeek, streak, fmtDate, latestWeight } from '../lib/calcs'
 import { today, uid } from '../lib/seed'
+import { caloriesBurned, ninjaConfigured } from '../lib/apiNinjas'
 import { WorkoutType, Exercise } from '../lib/types'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Loader2, Flame } from 'lucide-react'
 
 interface ExRow { id: string; name: string; setsReps: string; weight: string }
 
@@ -89,6 +90,22 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
   const [date, setDate] = useState(today())
   const [rows, setRows] = useState<ExRow[]>([{ id: uid(), name: '', setsReps: '3x10', weight: '' }])
   const [cardio, setCardio] = useState({ duration: '', distance: '', calories: '' })
+  const [activity, setActivity] = useState('')
+  const [estBusy, setEstBusy] = useState(false)
+  const [estMsg, setEstMsg] = useState<string | null>(null)
+  const weightKg = useStore((s) => latestWeight(s.data))
+
+  async function estimate() {
+    const act = (activity || name).trim()
+    if (!act) { setEstMsg('Enter an activity (e.g. running)'); return }
+    setEstBusy(true); setEstMsg(null)
+    const res = await caloriesBurned(act, +cardio.duration || 0, weightKg)
+    setEstBusy(false)
+    if (!res.length) { setEstMsg('No match — try a simpler activity name, or enter calories manually.'); return }
+    const r = res[0]
+    setCardio((c) => ({ ...c, calories: String(r.total_calories || r.calories_per_hour) }))
+    setEstMsg(`${r.name}: ~${r.total_calories || r.calories_per_hour} kcal`)
+  }
 
   function save() {
     if (type === 'strength') {
@@ -138,11 +155,23 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
             <button className="btn btn-sm mt-1" onClick={() => setRows([...rows, { id: uid(), name: '', setsReps: '3x10', weight: '' }])}>+ Add Exercise</button>
           </>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <div><label className="label">Duration (min)</label><input className="input" type="number" value={cardio.duration} onChange={(e) => setCardio({ ...cardio, duration: e.target.value })} /></div>
-            <div><label className="label">Distance (km)</label><input className="input" type="number" value={cardio.distance} onChange={(e) => setCardio({ ...cardio, distance: e.target.value })} /></div>
-            <div><label className="label">Calories</label><input className="input" type="number" value={cardio.calories} onChange={(e) => setCardio({ ...cardio, calories: e.target.value })} /></div>
-          </div>
+          <>
+            <div className="mb-3"><label className="label">Activity</label>
+              <input className="input" placeholder="e.g. running, cycling, swimming" value={activity} onChange={(e) => setActivity(e.target.value)} /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className="label">Duration (min)</label><input className="input" type="number" value={cardio.duration} onChange={(e) => setCardio({ ...cardio, duration: e.target.value })} /></div>
+              <div><label className="label">Distance (km)</label><input className="input" type="number" value={cardio.distance} onChange={(e) => setCardio({ ...cardio, distance: e.target.value })} /></div>
+              <div><label className="label">Calories</label><input className="input" type="number" value={cardio.calories} onChange={(e) => setCardio({ ...cardio, calories: e.target.value })} /></div>
+            </div>
+            {ninjaConfigured && (
+              <div className="mt-2.5">
+                <button className="btn btn-sm w-full justify-center" disabled={estBusy} onClick={estimate}>
+                  {estBusy ? <Loader2 size={14} className="animate-spin" /> : <Flame size={14} className="text-amber" />} Estimate calories from activity
+                </button>
+                {estMsg && <div className="text-[11px] text-muted mt-1.5 text-center">{estMsg}</div>}
+              </div>
+            )}
+          </>
         )}
         <button className="btn btn-primary w-full mt-4" onClick={save}>Save Workout</button>
       </div>
