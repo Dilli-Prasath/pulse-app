@@ -1,27 +1,43 @@
 /**
  * "Today's session" engine.
  *
- * From the user's active program + the current weekday, work out what they
- * should train today and auto-build the exercise list (mapped from the day's
- * focus → muscle groups → curated exercises) so nothing has to be typed.
+ * From the active program + current weekday, decide what to train today and
+ * auto-build the plan so nothing has to be typed:
+ *   - strength days  → exercises with sets/reps
+ *   - cardio/HIIT     → a guided timed circuit (work seconds per move)
+ * Also estimates how long the session will take.
  */
 import { AppData } from './types'
 import { getProgram, Program } from './programs'
 import { EXERCISE_LIBRARY } from './exerciseLibrary'
 
-export interface SessionExercise { name: string; sets: number; reps: number; muscle: string; howto: string }
+export interface SessionItem {
+  name: string
+  muscle?: string
+  howto: string
+  /** strength */
+  sets?: number
+  reps?: number
+  /** timed circuit (work interval) */
+  seconds?: number
+}
+export type SessionMode = 'strength' | 'circuit'
 export interface TodaySession {
   program: Program
   weekday: string
   focus: string
   rest: boolean
-  cardio: boolean
-  exercises: SessionExercise[]
+  mode: SessionMode
+  items: SessionItem[]
+  estMin: number
+  /** rest between items, seconds (timer guidance) */
+  restSec: number
 }
 
 const BIG_LIFTS = new Set(['Squat', 'Deadlift', 'Bench Press', 'Overhead Press', 'Front Squat', 'Power Clean', 'Romanian Deadlift'])
+const STRENGTH_REST = 75
+const CIRCUIT_REST = 20
 
-/** Map a free-text focus label to the muscle groups it targets. */
 function musclesForFocus(focus: string): string[] {
   const f = focus.toLowerCase()
   if (/push|chest/.test(f)) return ['Chest', 'Shoulders', 'Arms']
@@ -33,47 +49,58 @@ function musclesForFocus(focus: string): string[] {
   if (/full body|full|whole|conditioning|strength/.test(f)) return ['Legs', 'Chest', 'Back', 'Core', 'Glutes']
   return []
 }
-
 const isCardio = (focus: string) => /cardio|hiit|run|walk|step|conditioning|spin|cycle|swim/i.test(focus)
 
-/** Build the exercise list for a given program day focus. */
-export function buildSessionExercises(program: Program, focus: string): SessionExercise[] {
+const HIIT_CIRCUIT: SessionItem[] = [
+  { name: 'Jumping Jacks', howto: 'Jump feet out while raising arms overhead, then back. Keep a steady fast pace.', seconds: 40 },
+  { name: 'Bodyweight Squat', howto: 'Sit back and down keeping chest up, drive through heels. Fast but controlled.', seconds: 40 },
+  { name: 'Push Up', howto: 'Body in a straight line, lower until elbows ~90°, press up. Drop to knees if needed.', seconds: 40 },
+  { name: 'Mountain Climbers', howto: 'In a plank, drive knees to chest alternately, fast. Keep hips low.', seconds: 40 },
+  { name: 'Walking Lunge', howto: 'Step forward and drop the back knee toward the floor; alternate legs.', seconds: 40 },
+  { name: 'Plank', howto: 'Forearms down, body straight, brace your core and hold.', seconds: 40 },
+]
+
+export function buildStrength(program: Program, focus: string): SessionItem[] {
   const muscles = musclesForFocus(focus)
   let picks = EXERCISE_LIBRARY.filter((e) => muscles.includes(e.muscle))
-  // bias toward the program's own key exercises first
   const keys = new Set(program.keyExercises)
-  picks.sort((a, b) => Number(keys.has(b.name)) - Number(keys.has(a.name)))
+  picks = [...picks].sort((a, b) => Number(keys.has(b.name)) - Number(keys.has(a.name)))
   let chosen = picks.slice(0, 6)
   if (chosen.length < 4) {
-    // fall back to the program's signature lifts
-    const fallback = program.keyExercises.map((n) => EXERCISE_LIBRARY.find((e) => e.name === n)).filter(Boolean) as typeof EXERCISE_LIBRARY
+    const fb = program.keyExercises.map((n) => EXERCISE_LIBRARY.find((e) => e.name === n)).filter(Boolean) as typeof EXERCISE_LIBRARY
     const seen = new Set(chosen.map((c) => c.name))
-    for (const e of fallback) if (!seen.has(e.name)) { chosen.push(e); seen.add(e.name) }
+    for (const e of fb) if (!seen.has(e.name)) { chosen.push(e); seen.add(e.name) }
     chosen = chosen.slice(0, 6)
   }
   return chosen.map((e) => ({
-    name: e.name,
-    sets: BIG_LIFTS.has(e.name) ? 4 : 3,
-    reps: BIG_LIFTS.has(e.name) ? 8 : 12,
-    muscle: e.muscle,
-    howto: e.howto,
+    name: e.name, muscle: e.muscle, howto: e.howto,
+    sets: BIG_LIFTS.has(e.name) ? 4 : 3, reps: BIG_LIFTS.has(e.name) ? 8 : 12,
   }))
 }
 
 export function todaySession(d: AppData): TodaySession | null {
   const program = getProgram(d.profile.programId)
   if (!program) return null
-  const idx = (new Date().getDay() + 6) % 7 // Mon=0
+  const idx = (new Date().getDay() + 6) % 7
   const day = program.split[idx]
   const focus = day?.focus || 'Rest'
   const rest = /rest/i.test(focus)
   const cardio = isCardio(focus)
-  return {
-    program,
-    weekday: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
-    focus,
-    rest,
-    cardio,
-    exercises: rest || cardio ? [] : buildSessionExercises(program, focus),
+  const mode: SessionMode = cardio ? 'circuit' : 'strength'
+  const items = rest ? [] : cardio ? HIIT_CIRCUIT : buildStrength(program, focus)
+  const restSec = cardio ? CIRCUIT_REST : STRENGTH_REST
+
+  // estimate minutes
+  let estMin = 0
+  if (!rest) {
+    if (mode === 'circuit') {
+      const perItem = items.reduce((s, it) => s + (it.seconds || 40) + restSec, 0)
+      estMin = Math.round((perItem) / 60)
+    } else {
+      // ~ sets * (reps*3s work + rest)
+      const sec = items.reduce((s, it) => s + (it.sets || 3) * ((it.reps || 10) * 3 + restSec), 0)
+      estMin = Math.round(sec / 60)
+    }
   }
+  return { program, weekday: new Date().toLocaleDateString('en-US', { weekday: 'long' }), focus, rest, mode, items, estMin, restSec }
 }

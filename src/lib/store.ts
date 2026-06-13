@@ -62,6 +62,7 @@ interface StoreState {
   // mutations
   update: (fn: (d: AppData) => void) => void
   addWorkout: (w: Omit<Workout, 'id'>) => void
+  logSession: (w: Omit<Workout, 'id'>) => void
   delWorkout: (id: string) => void
   addMeal: (m: Omit<Meal, 'id'>) => void
   delMeal: (id: string) => void
@@ -176,6 +177,11 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   addWorkout: (w) => get().update((d) => { d.workouts.push({ ...w, id: uid() }) }),
+  // Upsert by date+name so re-starting the same session doesn't create duplicates.
+  logSession: (w) => get().update((d) => {
+    d.workouts = d.workouts.filter((x) => !(x.date === w.date && x.name === w.name))
+    d.workouts.push({ ...w, id: uid() })
+  }),
   delWorkout: (id) => get().update((d) => { d.workouts = d.workouts.filter((x) => x.id !== id) }),
   addMeal: (m) => get().update((d) => { d.meals.push({ ...m, id: uid() }) }),
   delMeal: (id) => get().update((d) => { d.meals = d.meals.filter((x) => x.id !== id) }),

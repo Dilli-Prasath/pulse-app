@@ -11,7 +11,7 @@ import { Check, Sparkles, Play } from 'lucide-react'
 export default function Programs() {
   const d = useStore((s) => s.data)
   const saveProfile = useStore((s) => s.saveProfile)
-  const addWorkout = useStore((s) => s.addWorkout)
+  const logSession = useStore((s) => s.logSession)
   const showToast = useStore((s) => s.showToast)
   const nav = useNavigate()
   const [gender, setGender] = useState<Gender>('all')
@@ -26,9 +26,9 @@ export default function Programs() {
   function pick(p: Program) { saveProfile({ programId: p.id }); showToast(`${p.name} set as your goal 🎯`) }
   function startWorkout(p: Program) { startDay(p, p.split[0]?.focus || 'Day 1') }
   function startDay(p: Program, focus: string) {
-    addWorkout({ date: today(), type: 'strength', name: `${p.name} — ${focus}`,
+    logSession({ date: today(), type: 'strength', name: `${p.name} — ${focus}`,
       exercises: p.keyExercises.map((n) => ({ name: n, sets: Array.from({ length: 3 }, () => ({ reps: 10, weight: 0 })) })) })
-    showToast(`Started "${focus}" — set your weights in Workouts 💪`); nav('/workouts')
+    showToast(`Loaded "${focus}" — open Workouts to do it 💪`); nav('/workouts')
   }
 
   return (

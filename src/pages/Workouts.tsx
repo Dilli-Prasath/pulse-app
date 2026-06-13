@@ -22,6 +22,7 @@ const NAME_SUGGESTIONS = ['Push Day', 'Pull Day', 'Leg Day', 'Upper Body', 'Lowe
 export default function Workouts() {
   const d = useStore((s) => s.data)
   const addWorkout = useStore((s) => s.addWorkout)
+  const logSession = useStore((s) => s.logSession)
   const delWorkout = useStore((s) => s.delWorkout)
   const showToast = useStore((s) => s.showToast)
   const [params, setParams] = useSearchParams()
@@ -35,12 +36,6 @@ export default function Workouts() {
   const prKeys = Object.keys(pr)
 
   function close() { setOpen(false); params.delete('add'); setParams(params, { replace: true }) }
-  function quickLog() {
-    if (!sess) return
-    addWorkout({ date: today(), type: 'strength', name: `${sess.program.name} — ${sess.focus}`,
-      exercises: sess.exercises.map((e) => ({ name: e.name, sets: Array.from({ length: e.sets }, () => ({ reps: e.reps, weight: 0 })) })) })
-    showToast('Logged — fill in your weights 💪')
-  }
 
   return (
     <>
@@ -60,31 +55,23 @@ export default function Workouts() {
         <Card className="mb-4"><div className="h3 mb-1">📆 Today · {sess.weekday}</div>
           <div className="text-[15px] font-bold mt-1">😴 Rest day — {sess.program.name}</div>
           <div className="text-muted text-sm mt-1">Recover well. You can still log a custom workout above.</div></Card>
-      ) : sess.cardio ? (
-        <Card className="mb-4 card-glow"><div className="h3 mb-1">📆 Today · {sess.weekday}</div>
-          <div className="text-[15px] font-bold mt-1">🏃 {sess.focus} — {sess.program.name}</div>
-          <div className="text-muted text-sm mt-1 mb-3">Today is conditioning. Log your cardio session.</div>
-          <button className="btn btn-primary" onClick={() => setOpen(true)}>Log cardio</button></Card>
       ) : (
         <Card className="mb-4 card-glow">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div><div className="h3">📆 Today · {sess.weekday}</div>
               <div className="text-[16px] font-extrabold mt-1">{sess.program.emoji} {sess.focus}</div>
-              <div className="text-muted text-xs">{sess.program.name} · {sess.exercises.length} exercises auto-planned</div></div>
-            <div className="flex gap-2">
-              <button className="btn" onClick={quickLog}>Quick log</button>
-              <button className="btn btn-primary" onClick={() => setGuided(true)}><Play size={15} /> Start guided</button>
-            </div>
+              <div className="text-muted text-xs">{sess.program.name} · {sess.mode === 'circuit' ? `${sess.items.length}-move circuit` : `${sess.items.length} exercises`} · ~{sess.estMin} min</div></div>
+            <button className="btn btn-primary" onClick={() => setGuided(true)}><Play size={15} /> Start guided</button>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {sess.exercises.map((e) => (
+            {sess.items.map((e) => (
               <div key={e.name} className="flex items-center gap-2 pr-3 rounded-xl" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
                 <ExerciseImage name={e.name} size={40} rounded={10} />
-                <div className="text-xs"><b className="block">{e.name}</b><span className="text-muted">{e.sets}×{e.reps}</span></div>
+                <div className="text-xs"><b className="block">{e.name}</b><span className="text-muted">{sess.mode === 'circuit' ? `${e.seconds}s` : `${e.sets}×${e.reps}`}</span></div>
               </div>
             ))}
           </div>
-          <div className="text-[11px] text-muted2 mt-2 flex items-center gap-1"><Sparkles size={11} /> Auto-planned from your program. Tap “Start guided” to be walked through it step by step.</div>
+          <div className="text-[11px] text-muted2 mt-2 flex items-center gap-1"><Sparkles size={11} /> Auto-planned & timed. Tap “Start guided” — it walks you through each move with a clock and shows what's next.</div>
         </Card>
       )}
 
@@ -139,10 +126,11 @@ export default function Workouts() {
 
       {open && <WorkoutModal onClose={close} onSave={(w) => { addWorkout(w); showToast('Workout logged 💪'); close() }} />}
 
-      {guided && sess && !sess.rest && !sess.cardio && (
-        <GuidedSession title={`${sess.program.name} — ${sess.focus}`} exercises={sess.exercises}
+      {guided && sess && !sess.rest && (
+        <GuidedSession title={`${sess.program.name} — ${sess.focus}`} items={sess.items} mode={sess.mode}
+          restSec={sess.restSec} estMin={sess.estMin}
           onClose={() => setGuided(false)}
-          onComplete={(w) => { addWorkout(w); setGuided(false); showToast('Session complete — saved! 🎉') }} />
+          onComplete={(w) => { logSession(w); setGuided(false); showToast('Session complete — saved! 🎉') }} />
       )}
     </>
   )
