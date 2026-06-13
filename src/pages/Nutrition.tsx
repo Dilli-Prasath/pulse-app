@@ -5,8 +5,10 @@ import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget
 import { today, uid, FOOD_DB, FoodItem } from '../lib/seed'
 import { searchFoods, lookupBarcode, FoodResult } from '../lib/foodApi'
 import { parseNutrition, ParsedNutrition, ninjaConfigured } from '../lib/apiNinjas'
+import { exportNutrition } from '../lib/shareExport'
+import { ocrImage } from '../lib/ocr'
 import { MealType, Meal } from '../lib/types'
-import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles } from 'lucide-react'
+import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown } from 'lucide-react'
 
 const MEAL_ICON: Record<MealType, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' }
 
@@ -21,6 +23,22 @@ export default function Nutrition() {
   const tgt = calorieTarget(d)
   const m = macrosOn(d, t)
   const meals = mealsOn(d, t)
+
+  async function doExport(fmt: 'png' | 'pdf') {
+    showToast('Generating ' + fmt.toUpperCase() + '…')
+    try {
+      await exportNutrition({
+        who: d.profile.name || 'You',
+        dateLabel: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        meals: meals.map((x) => ({ name: x.name, mealType: x.mealType, calories: x.calories, protein: x.protein, carbs: x.carbs, fat: x.fat })),
+        totals: { cal: cals, p: Math.round(m.p), c: Math.round(m.c), f: Math.round(m.f) },
+        target: tgt,
+        waterMl: waterToday(d),
+      }, fmt)
+    } catch {
+      showToast('Export failed — try again')
+    }
+  }
 
   return (
     <>
@@ -44,7 +62,16 @@ export default function Nutrition() {
 
       <WaterCard />
 
-      <Card className="mt-4"><div className="h3 mb-3">Today's Meals</div>
+      <Card className="mt-4">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="h3">Today's Meals</div>
+          {meals.length > 0 && (
+            <div className="flex gap-2">
+              <button className="btn btn-sm" onClick={() => doExport('png')}><ImageIcon size={13} /> PNG</button>
+              <button className="btn btn-sm" onClick={() => doExport('pdf')}><FileDown size={13} /> PDF</button>
+            </div>
+          )}
+        </div>
         {meals.length ? (
           <div className="flex flex-col gap-2.5">
             {meals.map((meal) => (
@@ -96,7 +123,7 @@ function WaterCard() {
   )
 }
 
-type Source = 'smart' | 'online' | 'quick' | 'barcode' | 'manual'
+type Source = 'smart' | 'scan' | 'online' | 'quick' | 'barcode' | 'manual'
 
 function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<Meal, 'id'> & { id: string }) => void }) {
   const [mealType, setMealType] = useState<MealType>('breakfast')
@@ -112,6 +139,34 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
   const [parsed, setParsed] = useState<ParsedNutrition | null>(null)
   const [sBusy, setSBusy] = useState(false)
   const [sMsg, setSMsg] = useState<string | null>(null)
+
+  // scan (OCR) mode
+  const [ocrBusy, setOcrBusy] = useState(false)
+  const [ocrPct, setOcrPct] = useState(0)
+  const [ocrMsg, setOcrMsg] = useState<string | null>(null)
+
+  async function doScan(file: File) {
+    setOcrBusy(true); setOcrMsg('Reading image…'); setOcrPct(0)
+    try {
+      const text = await ocrImage(file, setOcrPct)
+      if (!text) { setOcrMsg('Could not read any text. Try a clearer photo.'); setOcrBusy(false); return }
+      setSq(text)
+      setOcrMsg('Text extracted — analyzing nutrition…')
+      const r = await parseNutrition(text)
+      if (r) {
+        setParsed(r); setName('Scanned meal')
+        setVals({ calories: String(r.total.calories), protein: String(r.total.protein), carbs: String(r.total.carbs), fat: String(r.total.fat) })
+        setOcrMsg(`Found ${r.items.length} item(s). Review below and save.`)
+        setSource('smart')
+      } else {
+        setOcrMsg('Text extracted into the Smart tab — review/edit it there, then Analyze.')
+        setSource('smart')
+      }
+    } catch {
+      setOcrMsg('Scan failed. Try a clearer image or use Manual.')
+    }
+    setOcrBusy(false)
+  }
 
   // online search
   const [q, setQ] = useState('')
@@ -175,6 +230,7 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
 
   const SOURCES: { id: Source; label: string; icon: typeof Globe }[] = [
     ...(smartAvailable ? [{ id: 'smart' as Source, label: 'Smart', icon: Sparkles }] : []),
+    { id: 'scan', label: 'Scan', icon: ScanLine },
     { id: 'online', label: 'Search', icon: Globe },
     { id: 'quick', label: 'Quick', icon: ListPlus },
     { id: 'barcode', label: 'Barcode', icon: Barcode },
@@ -202,6 +258,19 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
             </button>
           ))}
         </div>
+
+        {source === 'scan' && (
+          <div className="mb-3">
+            <label className="label">Upload a food sheet / menu photo</label>
+            <label className="btn w-full justify-center cursor-pointer">
+              {ocrBusy ? <><Loader2 size={15} className="animate-spin" /> Reading… {ocrPct}%</> : <><ScanLine size={15} /> Choose image</>}
+              <input type="file" accept="image/*" className="hidden" disabled={ocrBusy}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) doScan(f); e.currentTarget.value = '' }} />
+            </label>
+            {ocrMsg && <div className="text-xs mt-2 text-muted">{ocrMsg}</div>}
+            <div className="text-[11px] text-muted2 mt-2">Snap your office diet chart — PULSE reads it on your device (OCR), extracts the foods & macros, and loads them below to review. Clear, well-lit photos work best. (Beta — always double-check before saving.)</div>
+          </div>
+        )}
 
         {source === 'smart' && (
           <div className="mb-3">
