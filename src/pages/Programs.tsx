@@ -24,10 +24,11 @@ export default function Programs() {
   const list = PROGRAMS.filter((p) => gender === 'all' ? true : p.gender === 'all' || p.gender === gender)
 
   function pick(p: Program) { saveProfile({ programId: p.id }); showToast(`${p.name} set as your goal 🎯`) }
-  function startWorkout(p: Program) {
-    addWorkout({ date: today(), type: 'strength', name: `${p.name} — Day 1`,
+  function startWorkout(p: Program) { startDay(p, p.split[0]?.focus || 'Day 1') }
+  function startDay(p: Program, focus: string) {
+    addWorkout({ date: today(), type: 'strength', name: `${p.name} — ${focus}`,
       exercises: p.keyExercises.map((n) => ({ name: n, sets: Array.from({ length: 3 }, () => ({ reps: 10, weight: 0 })) })) })
-    showToast('Starter workout added — set your weights in Workouts 💪'); nav('/workouts')
+    showToast(`Started "${focus}" — set your weights in Workouts 💪`); nav('/workouts')
   }
 
   return (
@@ -42,6 +43,28 @@ export default function Programs() {
           <div className="text-muted text-xs mt-3">Your active goal: <b className="text-txt">{active.emoji} {active.name}</b></div>
         )}
       </Card>
+
+      {/* today's session for the active program */}
+      {active && (() => {
+        const idx = (new Date().getDay() + 6) % 7
+        const day = active.split[idx]
+        const isRest = !day || /rest/i.test(day.focus)
+        const weekday = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+        return (
+          <Card className="mb-5">
+            <div className="h3 mb-2">📆 Today · {weekday}</div>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <b className="text-[17px]">{active.emoji} {day?.focus || 'Rest'}</b>
+                <div className="text-muted text-xs mt-0.5">{active.name}</div>
+              </div>
+              {isRest
+                ? <span className="tag bg-[rgba(120,160,255,.12)] text-muted">Rest day — recover 😴</span>
+                : <button className="btn btn-primary" onClick={() => startDay(active, day.focus)}><Play size={15} /> Start today's session</button>}
+            </div>
+          </Card>
+        )
+      })()}
 
       {/* gender filter */}
       <div className="flex gap-2 mb-4">
@@ -78,7 +101,8 @@ export default function Programs() {
       {detail && (
         <ProgramDetail p={detail} tdeeVal={Math.round(tdee(d))} bodyKg={w}
           active={active?.id === detail.id}
-          onClose={() => setDetail(null)} onPick={() => pick(detail)} onStart={() => startWorkout(detail)} />
+          onClose={() => setDetail(null)} onPick={() => pick(detail)} onStart={() => startWorkout(detail)}
+          onStartDay={(focus) => startDay(detail, focus)} />
       )}
     </>
   )
@@ -98,8 +122,8 @@ function ProgramRow({ p, active, onOpen, onPick }: { p: Program; active: boolean
   )
 }
 
-function ProgramDetail({ p, tdeeVal, bodyKg, active, onClose, onPick, onStart }:
-  { p: Program; tdeeVal: number; bodyKg: number; active: boolean; onClose: () => void; onPick: () => void; onStart: () => void }) {
+function ProgramDetail({ p, tdeeVal, bodyKg, active, onClose, onPick, onStart, onStartDay }:
+  { p: Program; tdeeVal: number; bodyKg: number; active: boolean; onClose: () => void; onPick: () => void; onStart: () => void; onStartDay: (focus: string) => void }) {
   const kcal = Math.max(1200, tdeeVal + p.kcalDelta)
   const protein = Math.round((bodyKg || 75) * p.proteinPerKg)
   const carbs = Math.round((kcal * p.macros.carbs / 100) / 4)
@@ -121,13 +145,17 @@ function ProgramDetail({ p, tdeeVal, bodyKg, active, onClose, onPick, onStart }:
         </div>
         <div className="text-[11px] text-muted2 mb-4">{p.kcalDelta < 0 ? `${Math.abs(p.kcalDelta)} kcal deficit` : p.kcalDelta > 0 ? `${p.kcalDelta} kcal surplus` : 'at maintenance'} · based on your TDEE of {tdeeVal} kcal.</div>
 
-        <div className="h3 mb-2">📅 Weekly Split</div>
+        <div className="h3 mb-2">📅 Weekly Split <span className="text-muted2 text-[11px] normal-case font-normal">— tap a day to start it</span></div>
         <div className="grid grid-cols-1 gap-1.5 mb-4">
-          {p.split.map((s) => (
+          {p.split.map((s) => {
+            const rest = /rest/i.test(s.focus)
+            return (
             <div key={s.day} className="flex items-center gap-3 text-sm p-2 rounded-lg" style={{ background: 'rgba(6,8,15,.4)' }}>
-              <span className="w-10 font-bold text-muted">{s.day}</span><span>{s.focus}</span>
+              <span className="w-10 font-bold text-muted">{s.day}</span><span className="flex-1">{s.focus}</span>
+              {!rest && <button className="btn btn-sm" onClick={() => onStartDay(s.focus)}><Play size={12} /> Start</button>}
             </div>
-          ))}
+            )
+          })}
         </div>
 
         <div className="h3 mb-2">🏋️ Key Exercises</div>

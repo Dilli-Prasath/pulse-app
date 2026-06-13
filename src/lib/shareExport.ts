@@ -1,5 +1,5 @@
-import { toPng } from 'html-to-image'
-import { jsPDF } from 'jspdf'
+// html-to-image and jspdf are loaded lazily inside exportNutrition() so the
+// Nutrition page never depends on them being present until you actually export.
 
 export interface ReportMeal { name: string; mealType: string; calories: number; protein: number; carbs: number; fat: number }
 export interface ReportData {
@@ -57,6 +57,7 @@ function escapeHtml(s: string): string {
 }
 
 export async function exportNutrition(d: ReportData, fmt: 'png' | 'pdf'): Promise<void> {
+  const { toPng } = await import('html-to-image')
   const node = buildNode(d)
   document.body.appendChild(node)
   try {
@@ -70,6 +71,7 @@ export async function exportNutrition(d: ReportData, fmt: 'png' | 'pdf'): Promis
       const a = document.createElement('a')
       a.href = dataUrl; a.download = `${fname}.png`; a.click()
     } else {
+      const { jsPDF } = await import('jspdf')
       const pdf = new jsPDF({ orientation: h > w ? 'p' : 'l', unit: 'px', format: [w, h] })
       pdf.addImage(dataUrl, 'PNG', 0, 0, w, h)
       pdf.save(`${fname}.pdf`)

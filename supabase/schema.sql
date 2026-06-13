@@ -67,3 +67,74 @@ create policy "lb admin update" on public.leaderboard
 drop policy if exists "lb admin delete" on public.leaderboard;
 create policy "lb admin delete" on public.leaderboard
   for delete using (auth.jwt() ->> 'email' = 'dilli.prasath0201@gmail.com');
+
+
+-- ============================================================
+--  Groups / teams with invite codes.
+--  Members can read their groups and fellow members' published stats.
+-- ============================================================
+create table if not exists public.groups (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  owner_id    uuid not null references auth.users (id) on delete cascade,
+  invite_code text not null unique,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.group_members (
+  group_id        uuid not null references public.groups (id) on delete cascade,
+  user_id         uuid not null references auth.users (id) on delete cascade,
+  name            text,
+  color           text default '#22e3ff',
+  weight_lost     numeric default 0,
+  streak          int default 0,
+  weekly_workouts int default 0,
+  updated_at      timestamptz not null default now(),
+  primary key (group_id, user_id)
+);
+
+-- Avoids RLS recursion when checking membership.
+create or replace function public.is_group_member(gid uuid)
+  returns boolean language sql security definer stable as $$
+  select exists (select 1 from public.group_members where group_id = gid and user_id = auth.uid());
+$$;
+
+alter table public.groups enable row level security;
+alter table public.group_members enable row level security;
+
+drop policy if exists "groups read" on public.groups;
+create policy "groups read" on public.groups
+  for select using (owner_id = auth.uid() or public.is_group_member(id));
+drop policy if exists "groups insert" on public.groups;
+create policy "groups insert" on public.groups
+  for insert with check (owner_id = auth.uid());
+drop policy if exists "groups delete" on public.groups;
+create policy "groups delete" on public.groups
+  for delete using (owner_id = auth.uid());
+
+drop policy if exists "gm read" on public.group_members;
+create policy "gm read" on public.group_members
+  for select using (public.is_group_member(group_id));
+drop policy if exists "gm insert" on public.group_members;
+create policy "gm insert" on public.group_members
+  for insert with check (user_id = auth.uid());
+drop policy if exists "gm update" on public.group_members;
+create policy "gm update" on public.group_members
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "gm delete" on public.group_members;
+create policy "gm delete" on public.group_members
+  for delete using (user_id = auth.uid());
+
+-- Join a group by its invite code (resolves code -> id and adds you).
+create or replace function public.join_group(p_code text, p_name text, p_color text)
+  returns uuid language plpgsql security definer as $$
+declare gid uuid;
+begin
+  select id into gid from public.groups where invite_code = p_code;
+  if gid is null then return null; end if;
+  insert into public.group_members (group_id, user_id, name, color)
+    values (gid, auth.uid(), p_name, p_color)
+    on conflict (group_id, user_id) do update set name = excluded.name, color = excluded.color;
+  return gid;
+end; $$;
+grant execute on function public.join_group(text, text, text) to authenticated;

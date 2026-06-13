@@ -2,18 +2,22 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { Card, Stat, Modal, Empty, Tag, PageHeader } from '../components/ui'
+import { useNavigate } from 'react-router-dom'
 import { ExerciseImage } from '../components/ExerciseImage'
 import { Combobox } from '../components/Combobox'
+import { GuidedSession } from '../components/GuidedSession'
 import { EXERCISE_LIBRARY } from '../lib/exerciseLibrary'
+import { todaySession } from '../lib/session'
 import { totalVolume, prs, workoutsThisWeek, streak, fmtDate, latestWeight } from '../lib/calcs'
 import { today, uid } from '../lib/seed'
 import { caloriesBurned, ninjaConfigured } from '../lib/apiNinjas'
 import { WorkoutType, Exercise } from '../lib/types'
-import { Trash2, Loader2, Flame } from 'lucide-react'
+import { Trash2, Loader2, Flame, Play, Sparkles } from 'lucide-react'
 
 interface ExRow { id: string; name: string; setsReps: string; weight: string }
 
 const EXERCISE_NAMES = [...new Set(EXERCISE_LIBRARY.map((e) => e.name))].sort()
+const NAME_SUGGESTIONS = ['Push Day', 'Pull Day', 'Leg Day', 'Upper Body', 'Lower Body', 'Full Body', 'Chest & Triceps', 'Back & Biceps', 'Shoulders & Arms', 'Core & Abs', 'Morning Run', 'Cardio', 'HIIT']
 
 export default function Workouts() {
   const d = useStore((s) => s.data)
@@ -22,17 +26,67 @@ export default function Workouts() {
   const showToast = useStore((s) => s.showToast)
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState(params.get('add') === '1')
+  const [guided, setGuided] = useState(false)
+  const nav = useNavigate()
+  const sess = todaySession(d)
 
   const list = [...d.workouts].sort((a, b) => b.date.localeCompare(a.date))
   const pr = prs(d)
   const prKeys = Object.keys(pr)
 
   function close() { setOpen(false); params.delete('add'); setParams(params, { replace: true }) }
+  function quickLog() {
+    if (!sess) return
+    addWorkout({ date: today(), type: 'strength', name: `${sess.program.name} — ${sess.focus}`,
+      exercises: sess.exercises.map((e) => ({ name: e.name, sets: Array.from({ length: e.sets }, () => ({ reps: e.reps, weight: 0 })) })) })
+    showToast('Logged — fill in your weights 💪')
+  }
 
   return (
     <>
       <PageHeader title="Workouts" sub={`${d.workouts.length} sessions · ${streak(d)} day streak 🔥`}
         action={<button className="btn btn-primary" onClick={() => setOpen(true)}>+ New Workout</button>} />
+
+      {/* Today's guided session */}
+      {!sess ? (
+        <Card className="mb-4 card-glow">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div><div className="h3">📆 Today's Session</div>
+              <div className="text-muted text-sm mt-1">Pick a goal program to get a guided daily workout.</div></div>
+            <button className="btn btn-primary" onClick={() => nav('/programs')}>Choose a program</button>
+          </div>
+        </Card>
+      ) : sess.rest ? (
+        <Card className="mb-4"><div className="h3 mb-1">📆 Today · {sess.weekday}</div>
+          <div className="text-[15px] font-bold mt-1">😴 Rest day — {sess.program.name}</div>
+          <div className="text-muted text-sm mt-1">Recover well. You can still log a custom workout above.</div></Card>
+      ) : sess.cardio ? (
+        <Card className="mb-4 card-glow"><div className="h3 mb-1">📆 Today · {sess.weekday}</div>
+          <div className="text-[15px] font-bold mt-1">🏃 {sess.focus} — {sess.program.name}</div>
+          <div className="text-muted text-sm mt-1 mb-3">Today is conditioning. Log your cardio session.</div>
+          <button className="btn btn-primary" onClick={() => setOpen(true)}>Log cardio</button></Card>
+      ) : (
+        <Card className="mb-4 card-glow">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div><div className="h3">📆 Today · {sess.weekday}</div>
+              <div className="text-[16px] font-extrabold mt-1">{sess.program.emoji} {sess.focus}</div>
+              <div className="text-muted text-xs">{sess.program.name} · {sess.exercises.length} exercises auto-planned</div></div>
+            <div className="flex gap-2">
+              <button className="btn" onClick={quickLog}>Quick log</button>
+              <button className="btn btn-primary" onClick={() => setGuided(true)}><Play size={15} /> Start guided</button>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {sess.exercises.map((e) => (
+              <div key={e.name} className="flex items-center gap-2 pr-3 rounded-xl" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
+                <ExerciseImage name={e.name} size={40} rounded={10} />
+                <div className="text-xs"><b className="block">{e.name}</b><span className="text-muted">{e.sets}×{e.reps}</span></div>
+              </div>
+            ))}
+          </div>
+          <div className="text-[11px] text-muted2 mt-2 flex items-center gap-1"><Sparkles size={11} /> Auto-planned from your program. Tap “Start guided” to be walked through it step by step.</div>
+        </Card>
+      )}
 
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
         <Stat label="This Week" value={workoutsThisWeek(d)} color="#22e3ff" />
@@ -84,6 +138,12 @@ export default function Workouts() {
       </Card>
 
       {open && <WorkoutModal onClose={close} onSave={(w) => { addWorkout(w); showToast('Workout logged 💪'); close() }} />}
+
+      {guided && sess && !sess.rest && !sess.cardio && (
+        <GuidedSession title={`${sess.program.name} — ${sess.focus}`} exercises={sess.exercises}
+          onClose={() => setGuided(false)}
+          onComplete={(w) => { addWorkout(w); setGuided(false); showToast('Session complete — saved! 🎉') }} />
+      )}
     </>
   )
 }
@@ -137,7 +197,7 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
           <span className={`chip ${type === 'cardio' ? 'chip-on' : ''}`} onClick={() => setType('cardio')}>🏃 Cardio</span>
         </div>
         <div className="mb-3.5"><label className="label">Workout Name</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Push Day / Morning Run" /></div>
+          <Combobox value={name} options={NAME_SUGGESTIONS} placeholder="e.g. Push Day / Morning Run" onChange={setName} /></div>
         <div className="mb-3.5"><label className="label">Date</label>
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
 

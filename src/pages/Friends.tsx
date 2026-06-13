@@ -5,7 +5,8 @@ import { workoutsThisWeek, streak, totalLost } from '../lib/calcs'
 import { ACHIEVEMENTS } from '../lib/achievements'
 import { Friend } from '../lib/types'
 import { isAdmin, fetchLeaderboard, upsertEntry, deleteEntry, LbEntry, ADMIN_EMAIL } from '../lib/leaderboard'
-import { Trash2, Pencil, ShieldCheck, Globe, Plus } from 'lucide-react'
+import { myGroups, groupMembers, createGroup, joinByCode, publishStats, leaveGroup, inviteLink, Group, GroupMember, MemberStats } from '../lib/groups'
+import { Trash2, Pencil, ShieldCheck, Globe, Plus, Users2, Copy, LogOut, UserPlus } from 'lucide-react'
 
 interface Row { me?: boolean; name: string; color: string; weeklyWorkouts: number; streak: number; weightLost: number; caloriesAvg: number }
 
@@ -43,6 +44,8 @@ export default function Friends() {
           <button className="btn btn-primary" onClick={() => setOpen(true)}>+ Add Friend</button></div>} />
 
       {cloud && <GlobalLeaderboard admin={admin} />}
+
+      {cloud && session && <GroupsSection />}
 
       <div className="h3 mt-6 mb-3 flex items-center gap-2">👥 Your Personal Board <span className="text-muted2 text-[11px] normal-case font-normal">(friends you add via code)</span></div>
       <Card><div className="h3 mb-3">🏆 Weight-Loss Leaderboard</div>
@@ -115,6 +118,132 @@ function AddFriendModal({ onClose, onSave }: { onClose: () => void; onSave: (f: 
         <div className="mb-3.5"><label className="label">Friend's Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" /></div>
         <div className="mb-1"><label className="label">Or paste Share Code</label><textarea className="input" rows={3} value={code} onChange={(e) => setCode(e.target.value)} placeholder="PULSE:..." /></div>
         <button className="btn btn-primary w-full mt-4" onClick={save}>Add Friend</button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ---------------- Groups / teams ---------------- */
+function useMyStats(): MemberStats {
+  const d = useStore((s) => s.data)
+  return {
+    name: d.profile.name.split(' ')[0] || 'You',
+    color: d.profile.avatar,
+    weight_lost: Math.max(0, totalLost(d)),
+    streak: streak(d),
+    weekly_workouts: workoutsThisWeek(d),
+  }
+}
+
+function GroupsSection() {
+  const showToast = useStore((s) => s.showToast)
+  const me = useMyStats()
+  const [groups, setGroups] = useState<Group[]>([])
+  const [membersByGroup, setMembersByGroup] = useState<Record<string, GroupMember[]>>({})
+  const [createOpen, setCreateOpen] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function load() {
+    const gs = await myGroups()
+    setGroups(gs)
+    if (gs.length) await publishStats(gs.map((g) => g.id), me)
+    const map: Record<string, GroupMember[]> = {}
+    await Promise.all(gs.map(async (g) => { map[g.id] = await groupMembers(g.id) }))
+    setMembersByGroup(map)
+  }
+  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // handle invite link: /friends?join=CODE
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('join')
+    if (!code) return
+    ;(async () => {
+      const r = await joinByCode(code, me)
+      if (r.error) showToast(r.error)
+      else { showToast('Joined the group 🎉'); await load() }
+      const url = new URL(window.location.href); url.searchParams.delete('join')
+      window.history.replaceState({}, '', url.pathname)
+    })()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function doJoin() {
+    if (!joinCode.trim()) return
+    setBusy(true)
+    const r = await joinByCode(joinCode, me)
+    setBusy(false)
+    if (r.error) { showToast(r.error); return }
+    setJoinCode(''); showToast('Joined 🎉'); await load()
+  }
+  async function doLeave(id: string) { await leaveGroup(id); showToast('Left group'); await load() }
+
+  const medal = ['#ffcf5c', '#cfd8ff', '#ff9d5c']
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <Users2 size={16} className="text-violet" />
+        <div className="h3">My Groups & Teams</div>
+        <button className="btn btn-sm btn-primary ml-auto" onClick={() => setCreateOpen(true)}><Plus size={13} /> Create group</button>
+      </div>
+
+      <Card className="mb-4">
+        <label className="label">Join a group with an invite code</label>
+        <div className="flex gap-2">
+          <input className="input" placeholder="e.g. 7K2Q9P" value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} />
+          <button className="btn btn-primary shrink-0" disabled={busy} onClick={doJoin}><UserPlus size={14} /> Join</button>
+        </div>
+      </Card>
+
+      {groups.length === 0
+        ? <Card><Empty icon="👥" title="No groups yet" sub="Create one and share the invite link with friends" /></Card>
+        : groups.map((g) => (
+          <Card key={g.id} className="mb-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+              <div><b className="text-[16px]">{g.name}</b>
+                <div className="text-muted text-xs mt-0.5">Invite code: <span className="text-cyan font-bold tracking-wider">{g.invite_code}</span></div></div>
+              <div className="flex gap-2">
+                <button className="btn btn-sm" onClick={() => { navigator.clipboard?.writeText(inviteLink(g.invite_code)); showToast('Invite link copied 🔗') }}><Copy size={13} /> Invite link</button>
+                <button className="btn btn-sm btn-danger" onClick={() => doLeave(g.id)}><LogOut size={13} /></button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {(membersByGroup[g.id] || []).map((mem, i) => (
+                <div key={mem.user_id} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
+                  <div className="w-6 text-center font-extrabold text-sm" style={{ color: medal[i] || '#7d89a8' }}>{i + 1}</div>
+                  <div className="w-9 h-9 rounded-lg grid place-items-center font-extrabold text-white shrink-0" style={{ background: mem.color }}>{(mem.name || '?')[0]}</div>
+                  <div className="flex-1 min-w-0"><b className="text-[14px]">{mem.name}</b>
+                    <span className="block text-[11px] text-muted">{mem.weekly_workouts}/wk · 🔥 {mem.streak}</span></div>
+                  <div className="font-extrabold text-right text-green shrink-0" style={{ color: '#2bffb0' }}>{mem.weight_lost}<span className="block text-[10px] text-muted font-semibold">kg lost</span></div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+
+      {createOpen && <CreateGroupModal me={me} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); void load() }} />}
+    </div>
+  )
+}
+
+function CreateGroupModal({ me, onClose, onCreated }: { me: MemberStats; onClose: () => void; onCreated: () => void }) {
+  const showToast = useStore((s) => s.showToast)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function save() {
+    if (!name.trim()) return
+    setBusy(true)
+    const r = await createGroup(name.trim(), me)
+    setBusy(false)
+    if (r.error) { showToast(r.error); return }
+    showToast('Group created 🎉'); onCreated()
+  }
+  return (
+    <Modal title="Create a group" onClose={onClose}>
+      <div className="mt-4">
+        <label className="label">Group name</label>
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Office Fitness Squad" />
+        <button className="btn btn-primary w-full mt-4" disabled={busy} onClick={save}>{busy ? 'Creating…' : 'Create & get invite link'}</button>
       </div>
     </Modal>
   )

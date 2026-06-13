@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
-import { getExerciseImage, placeholderImage } from '../lib/exerciseApi'
+import { exerciseImageUrl, placeholderImage } from '../lib/exerciseApi'
 
 export function ExerciseImage({ name, size = 48, rounded = 12 }: { name: string; size?: number; rounded?: number }) {
-  const [src, setSrc] = useState(() => placeholderImage(name))
-  useEffect(() => {
-    let alive = true
-    getExerciseImage(name).then((url) => { if (alive) setSrc(url) })
-    return () => { alive = false }
-  }, [name])
+  const [src, setSrc] = useState(() => exerciseImageUrl(name))
+  // reset when the name changes
+  useEffect(() => { setSrc(exerciseImageUrl(name)) }, [name])
   return (
     <img
       src={src}
