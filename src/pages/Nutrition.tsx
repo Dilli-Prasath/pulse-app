@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
 import { Card, Ring, Bar, Modal, Empty, PageHeader } from '../components/ui'
-import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget, fatTarget } from '../lib/calcs'
+import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget, fatTarget, waterToday } from '../lib/calcs'
 import { today, uid, FOOD_DB, FoodItem } from '../lib/seed'
 import { searchFoods, lookupBarcode, FoodResult } from '../lib/foodApi'
 import { parseNutrition, ParsedNutrition, ninjaConfigured } from '../lib/apiNinjas'
@@ -42,6 +42,8 @@ export default function Nutrition() {
         </Card>
       </div>
 
+      <WaterCard />
+
       <Card className="mt-4"><div className="h3 mb-3">Today's Meals</div>
         {meals.length ? (
           <div className="flex flex-col gap-2.5">
@@ -61,6 +63,36 @@ export default function Nutrition() {
 
       {open && <MealModal onClose={() => setOpen(false)} onSave={(meal) => { addMeal(meal); showToast('Meal logged 🍽️'); setOpen(false) }} />}
     </>
+  )
+}
+
+function WaterCard() {
+  const d = useStore((s) => s.data)
+  const logWater = useStore((s) => s.logWater)
+  const target = d.settings.waterTargetMl || 3000
+  const ml = waterToday(d)
+  const pct = Math.round((ml / target) * 100)
+  const glasses = [250, 500]
+  return (
+    <Card className="mt-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-4">
+          <Ring pct={pct} color="#22e3ff" label="of goal" center={`${pct}%`} />
+          <div>
+            <div className="h3">💧 Water</div>
+            <div className="text-2xl font-extrabold mt-1">{(ml / 1000).toFixed(2)}<span className="text-sm text-muted font-semibold"> / {(target / 1000).toFixed(1)} L</span></div>
+            <div className="text-xs text-muted mt-0.5">{ml >= target ? 'Goal reached 🎉' : `${((target - ml) / 1000).toFixed(2)} L to go`}</div>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {glasses.map((g) => (
+            <button key={g} className="btn btn-sm" onClick={() => logWater(g)}>+{g} ml</button>
+          ))}
+          <button className="btn btn-sm btn-primary" onClick={() => logWater(250)}>+ Glass</button>
+          {ml > 0 && <button className="btn btn-sm" onClick={() => logWater(-250)}>−250</button>}
+        </div>
+      </div>
+    </Card>
   )
 }
 

@@ -1,23 +1,6 @@
 /**
- * Exercise image service backed by the free & open wger.de API.
- * No API key required. Results are cached in localStorage so we don't
- * hammer the network, and every lookup degrades gracefully to a
- * generated SVG placeholder if the API is unreachable / has no image.
+ * Exercise visuals — deterministic generated tiles (see note on getExerciseImage).
  */
-
-import { wgerGet } from './wgerApi'
-
-const BASE = 'https://wger.de'
-const CACHE_KEY = 'pulse_ex_imgcache_v1'
-
-type Cache = Record<string, string> // exerciseName(lower) -> image url (or '' = none)
-
-function readCache(): Cache {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') } catch { return {} }
-}
-function writeCache(c: Cache) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)) } catch { /* ignore */ }
-}
 
 const GRADIENTS = [
   ['#22e3ff', '#8b5cff'],
@@ -41,30 +24,15 @@ export function placeholderImage(name: string): string {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
 }
 
-interface Suggestion {
-  data?: { image?: string | null; image_thumbnail?: string | null; name?: string }
-}
-
-/** Look up a real exercise image; falls back to a placeholder. Cached. */
+/**
+ * Returns a visual for an exercise.
+ *
+ * Note: wger removed its public exercise search/autocomplete endpoint (its list
+ * filters are ignored too), so reliable name→image matching is no longer
+ * possible without a paid provider. We render a clean, deterministic generated
+ * tile instead — instant, offline, and zero network errors. (A real-photo
+ * provider can be slotted in here later.)
+ */
 export async function getExerciseImage(name: string): Promise<string> {
-  const key = name.trim().toLowerCase()
-  if (!key) return placeholderImage(name)
-  const cache = readCache()
-  if (key in cache) return cache[key] || placeholderImage(name)
-
-  try {
-    const json = await wgerGet('exercise/search/', { language: 'en', format: 'json', term: name })
-    const list: Suggestion[] = json?.suggestions || []
-    let img = ''
-    for (const s of list) {
-      const raw = s?.data?.image || s?.data?.image_thumbnail
-      if (raw) { img = raw.startsWith('http') ? raw : BASE + raw; break }
-    }
-    cache[key] = img
-    writeCache(cache)
-    return img || placeholderImage(name)
-  } catch {
-    // Don't cache failures so we can retry later; just use placeholder now.
-    return placeholderImage(name)
-  }
+  return placeholderImage(name)
 }

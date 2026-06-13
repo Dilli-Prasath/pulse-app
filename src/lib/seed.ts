@@ -64,7 +64,9 @@ export function emptyAccount(): AppData {
     friends: [],
     routines: [],
     inbody: [],
-    settings: { accent: 'aurora', weightUnit: 'kg', exerciseSource: 'auto', foodSource: 'auto' },
+    water: [],
+    measurements: [],
+    settings: { accent: 'aurora', weightUnit: 'kg', exerciseSource: 'auto', foodSource: 'auto', waterTargetMl: 3000 },
   }
 }
 

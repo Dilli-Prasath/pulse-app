@@ -107,3 +107,8 @@ export function last7Days(): string[] {
     return d.toISOString().slice(0, 10)
   })
 }
+
+export function waterToday(d: AppData): number {
+  const t = new Date().toISOString().slice(0, 10)
+  return d.water.find((w) => w.date === t)?.ml || 0
+}

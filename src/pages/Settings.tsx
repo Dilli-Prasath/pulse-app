@@ -59,6 +59,11 @@ export default function Settings() {
           options={[{ value: 'kg', label: 'Kilograms', hint: 'kg' }, { value: 'lb', label: 'Pounds', hint: 'lb' }]}
           onChange={(v) => set({ weightUnit: v }, `Weight shown in ${v}`)} />
         <div className="text-[11px] text-muted2 mt-2">Existing weigh-ins are stored in kg and converted for display — no data is lost when you switch.</div>
+
+        <label className="label mt-4">Daily Water Goal (litres)</label>
+        <input className="input max-w-[160px]" type="number" step="0.1" min="0.5"
+          value={(s.waterTargetMl || 3000) / 1000}
+          onChange={(e) => set({ waterTargetMl: Math.round((+e.target.value || 3) * 1000) }, 'Water goal updated')} />
       </Card>
 
       {/* Data sources */}

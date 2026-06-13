@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings } from './types'
+import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry } from './types'
 import { emptyAccount, uid } from './seed'
 import { supabase, cloudConfigured, TABLE } from './supabase'
 import type { Session } from '@supabase/supabase-js'
@@ -24,9 +24,12 @@ function migrate(d: Partial<AppData>): AppData {
     weights: d.weights ?? [],
     workouts: d.workouts ?? [],
     meals: d.meals ?? [],
-    friends: d.friends ?? [],
+    // strip the old seeded demo friends (Arjun/Meera/Karthik) that may linger in saved data
+    friends: (d.friends ?? []).filter((f) => !['f1', 'f2', 'f3'].includes(f.id)),
     routines: d.routines ?? [],
     inbody: d.inbody ?? [],
+    water: d.water ?? [],
+    measurements: d.measurements ?? [],
     settings: { ...base.settings, ...(d.settings || {}) },
   }
 }
@@ -73,6 +76,9 @@ interface StoreState {
   addInbody: (e: Omit<InBodyEntry, 'id'>) => void
   importInbody: (rows: Omit<InBodyEntry, 'id'>[]) => void
   delInbody: (id: string) => void
+  logWater: (ml: number) => void
+  addMeasurement: (m: Omit<MeasurementEntry, 'id'>) => void
+  delMeasurement: (id: string) => void
   resetAll: () => void
 }
 
@@ -198,5 +204,16 @@ export const useStore = create<StoreState>((set, get) => ({
     d.inbody.sort((a, b) => a.date.localeCompare(b.date))
   }),
   delInbody: (id) => get().update((d) => { d.inbody = d.inbody.filter((x) => x.id !== id) }),
+  logWater: (ml) => get().update((d) => {
+    const today = new Date().toISOString().slice(0, 10)
+    const ex = d.water.find((w) => w.date === today)
+    if (ex) ex.ml = Math.max(0, ex.ml + ml)
+    else d.water.push({ date: today, ml: Math.max(0, ml) })
+  }),
+  addMeasurement: (m) => get().update((d) => {
+    d.measurements.push({ ...m, id: uid() })
+    d.measurements.sort((a, b) => a.date.localeCompare(b.date))
+  }),
+  delMeasurement: (id) => get().update((d) => { d.measurements = d.measurements.filter((x) => x.id !== id) }),
   resetAll: () => { const s = emptyAccount(); set({ data: s }); get().persist() },
 }))

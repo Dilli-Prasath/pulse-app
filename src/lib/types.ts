@@ -87,6 +87,17 @@ export interface Achievement {
   check: (s: AppData) => boolean
 }
 
+export interface WaterEntry { date: string; ml: number }
+export interface MeasurementEntry {
+  id: string
+  date: string
+  chest?: number
+  waist?: number
+  hips?: number
+  arms?: number
+  thighs?: number
+}
+
 export type Accent = 'aurora' | 'cyan' | 'violet' | 'sunset' | 'emerald'
 export type WeightUnit = 'kg' | 'lb'
 export type ExerciseSource = 'auto' | 'ninja' | 'wger'
@@ -97,6 +108,7 @@ export interface Settings {
   weightUnit: WeightUnit
   exerciseSource: ExerciseSource
   foodSource: FoodSource
+  waterTargetMl: number
 }
 
 export interface AppData {
@@ -107,5 +119,7 @@ export interface AppData {
   friends: Friend[]
   routines: Routine[]
   inbody: InBodyEntry[]
+  water: WaterEntry[]
+  measurements: MeasurementEntry[]
   settings: Settings
 }

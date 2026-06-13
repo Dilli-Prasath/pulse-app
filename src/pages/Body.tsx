@@ -5,22 +5,103 @@ import { LineArea } from '../components/charts'
 import { latestWeight, bmi, bmiLabel, totalLost, fmtDate } from '../lib/calcs'
 import { dispWeight, toKg, wLabel } from '../lib/units'
 import { today, uid } from '../lib/seed'
-import { InBodyEntry } from '../lib/types'
+import { InBodyEntry, MeasurementEntry } from '../lib/types'
 import { Trash2, Upload, Download } from 'lucide-react'
 
 export default function Body() {
   const d = useStore((s) => s.data)
-  const [tab, setTab] = useState<'weight' | 'inbody'>('weight')
+  const [tab, setTab] = useState<'weight' | 'inbody' | 'measure'>('weight')
 
   return (
     <>
-      <PageHeader title="Body" sub="Weight, BMI and full body-composition tracking" />
-      <div className="flex gap-2 mb-5">
+      <PageHeader title="Body" sub="Weight, BMI, body composition & measurements" />
+      <div className="flex gap-2 mb-5 flex-wrap">
         <span className={`chip ${tab === 'weight' ? 'chip-on' : ''}`} onClick={() => setTab('weight')}>⚖️ Weight & BMI</span>
         <span className={`chip ${tab === 'inbody' ? 'chip-on' : ''}`} onClick={() => setTab('inbody')}>🧬 InBody</span>
+        <span className={`chip ${tab === 'measure' ? 'chip-on' : ''}`} onClick={() => setTab('measure')}>📏 Measurements</span>
       </div>
-      {tab === 'weight' ? <WeightTab d={d} /> : <InBodyTab d={d} />}
+      {tab === 'weight' ? <WeightTab d={d} /> : tab === 'inbody' ? <InBodyTab d={d} /> : <MeasureTab d={d} />}
     </>
+  )
+}
+
+const MEASURE_FIELDS: { key: keyof MeasurementEntry; label: string; color: string }[] = [
+  { key: 'waist', label: 'Waist', color: '#ff4fd8' },
+  { key: 'chest', label: 'Chest', color: '#22e3ff' },
+  { key: 'hips', label: 'Hips', color: '#8b5cff' },
+  { key: 'arms', label: 'Arms', color: '#2bffb0' },
+  { key: 'thighs', label: 'Thighs', color: '#ffcf5c' },
+]
+
+function MeasureTab({ d }: { d: ReturnType<typeof useStore.getState>['data'] }) {
+  const addMeasurement = useStore((s) => s.addMeasurement)
+  const delMeasurement = useStore((s) => s.delMeasurement)
+  const showToast = useStore((s) => s.showToast)
+  const [open, setOpen] = useState(false)
+  const list = [...d.measurements].reverse()
+  const latest = d.measurements[d.measurements.length - 1]
+
+  return (
+    <>
+      <div className="flex justify-end mb-4"><button className="btn btn-primary" onClick={() => setOpen(true)}>+ Add Measurements</button></div>
+
+      {latest ? (
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))' }}>
+          {MEASURE_FIELDS.map((f) => (
+            <Stat key={f.key} label={f.label} value={(latest[f.key] as number) ?? '—'} unit={latest[f.key] != null ? 'cm' : ''} color={f.color} />
+          ))}
+        </div>
+      ) : <Card><Empty icon="📏" title="No measurements yet" sub="Track waist, chest, arms and more in cm" /></Card>}
+
+      {d.measurements.length > 0 && (
+        <div className="grid gap-4 mt-4 grid-cols-1 lg:grid-cols-2">
+          {MEASURE_FIELDS.filter((f) => d.measurements.some((m) => m[f.key] != null)).map((f) => (
+            <Card key={f.key}><div className="h3 mb-2">{f.label}</div>
+              <LineArea height={180} color={f.color} unit=" cm"
+                data={d.measurements.filter((m) => m[f.key] != null).map((m) => ({ label: fmtDate(m.date), value: m[f.key] as number }))} /></Card>
+          ))}
+        </div>
+      )}
+
+      {list.length > 0 && (
+        <Card className="mt-4"><div className="h3 mb-3">History</div>
+          <div className="flex flex-col gap-2.5">
+            {list.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl flex-wrap" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
+                <div className="w-10 h-10 rounded-xl grid place-items-center text-lg shrink-0" style={{ background: 'rgba(120,160,255,.08)' }}>📏</div>
+                <div className="flex-1 min-w-[140px]"><b className="text-[14px]">{fmtDate(m.date)}</b>
+                  <span className="block text-xs text-muted">{MEASURE_FIELDS.filter((f) => m[f.key] != null).map((f) => `${f.label} ${m[f.key]}cm`).join(' · ') || '—'}</span></div>
+                <button className="btn btn-sm btn-danger shrink-0" onClick={() => delMeasurement(m.id)}><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div></Card>
+      )}
+
+      {open && <MeasureModal onClose={() => setOpen(false)} onSave={(m) => { addMeasurement(m); showToast('Measurements saved 📏'); setOpen(false) }} />}
+    </>
+  )
+}
+
+function MeasureModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<MeasurementEntry, 'id'>) => void }) {
+  const [v, setV] = useState<Record<string, string>>({ date: today(), waist: '', chest: '', hips: '', arms: '', thighs: '' })
+  const set = (k: string, val: string) => setV({ ...v, [k]: val })
+  const numOrU = (s: string) => (s.trim() === '' ? undefined : +s)
+  return (
+    <Modal title="Add Measurements (cm)" onClose={onClose}>
+      <div className="mt-4">
+        <div className="mb-3.5"><label className="label">Date</label>
+          <input className="input" type="date" value={v.date} onChange={(e) => set('date', e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-3.5">
+          {MEASURE_FIELDS.map((f) => (
+            <div key={f.key}><label className="label">{f.label}</label>
+              <input className="input" type="number" step="0.1" value={v[f.key as string]} onChange={(e) => set(f.key as string, e.target.value)} /></div>
+          ))}
+        </div>
+        <button className="btn btn-primary w-full mt-4" onClick={() => onSave({
+          date: v.date || today(), waist: numOrU(v.waist), chest: numOrU(v.chest), hips: numOrU(v.hips), arms: numOrU(v.arms), thighs: numOrU(v.thighs),
+        })}>Save</button>
+      </div>
+    </Modal>
   )
 }
 
