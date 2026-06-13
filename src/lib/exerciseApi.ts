@@ -5,8 +5,9 @@
  * generated SVG placeholder if the API is unreachable / has no image.
  */
 
+import { wgerGet } from './wgerApi'
+
 const BASE = 'https://wger.de'
-const SEARCH = `${BASE}/api/v2/exercise/search/?language=en&format=json&term=`
 const CACHE_KEY = 'pulse_ex_imgcache_v1'
 
 type Cache = Record<string, string> // exerciseName(lower) -> image url (or '' = none)
@@ -52,11 +53,7 @@ export async function getExerciseImage(name: string): Promise<string> {
   if (key in cache) return cache[key] || placeholderImage(name)
 
   try {
-    const res = await fetch(SEARCH + encodeURIComponent(name), {
-      headers: { Accept: 'application/json' },
-    })
-    if (!res.ok) throw new Error('bad status')
-    const json = await res.json()
+    const json = await wgerGet('exercise/search/', { language: 'en', format: 'json', term: name })
     const list: Suggestion[] = json?.suggestions || []
     let img = ''
     for (const s of list) {

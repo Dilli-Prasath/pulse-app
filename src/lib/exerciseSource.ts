@@ -11,6 +11,7 @@
  * can show a "served by" badge.
  */
 import { searchExercises as ninjaSearch, NinjaExercise } from './apiNinjas'
+import { wgerGet } from './wgerApi'
 import { ExerciseSource } from './types'
 
 export interface UnifiedExercise {
@@ -27,8 +28,6 @@ export interface ExerciseSearchResult {
   fellBack: boolean
 }
 
-const WGER = 'https://wger.de/api/v2'
-
 /** Map a wger muscle/category term to something both APIs understand. */
 function fromNinja(e: NinjaExercise): UnifiedExercise {
   return {
@@ -39,11 +38,8 @@ function fromNinja(e: NinjaExercise): UnifiedExercise {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function wgerSearch(muscle: string): Promise<UnifiedExercise[]> {
-  // wger search endpoint returns name suggestions; we enrich with base info.
-  const term = encodeURIComponent(muscle)
-  const res = await fetch(`${WGER}/exercise/search/?language=en&format=json&term=${term}`)
-  if (!res.ok) throw new Error('wger search failed')
-  const json = await res.json()
+  // wger search endpoint returns name suggestions (proxied with the wger key when signed in).
+  const json = await wgerGet('exercise/search/', { language: 'en', format: 'json', term: muscle })
   const list: any[] = json?.suggestions || []
   const seen = new Set<string>()
   const items: UnifiedExercise[] = []

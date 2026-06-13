@@ -37,13 +37,34 @@ Deno.serve(async (req: Request) => {
   }
 
   const endpoint = String(body.endpoint || '')
+  const params = (body.params || {}) as Record<string, string | number>
+
+  // ---- wger proxy: attaches the wger token server-side (key never reaches the browser) ----
+  if (endpoint === 'wger') {
+    const path = String((params as Record<string, unknown>).path || '').replace(/^\/+/, '')
+    const rest = { ...params }; delete (rest as Record<string, unknown>).path
+    const wq = new URLSearchParams(Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, String(v)]))).toString()
+    // @ts-ignore - Deno global
+    const wkey = Deno.env.get('WGER_API_KEY')
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (wkey) headers['Authorization'] = `Token ${wkey}`
+    try {
+      const up = await fetch(`https://wger.de/api/v2/${path}?${wq}`, { headers })
+      const t = await up.text()
+      let d: unknown
+      try { d = JSON.parse(t) } catch { d = { error: t } }
+      return json(d, up.status)
+    } catch (e) {
+      return json({ error: String(e) }, 502)
+    }
+  }
+
   if (!ALLOWED.has(endpoint)) return json({ error: `Endpoint "${endpoint}" not allowed` }, 400)
 
   // @ts-ignore - Deno global
   const key = Deno.env.get('API_NINJAS_KEY')
   if (!key) return json({ error: 'API_NINJAS_KEY secret is not set on the server' }, 500)
 
-  const params = body.params || {}
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
   ).toString()

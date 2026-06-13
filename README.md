@@ -81,6 +81,8 @@ These power: full exercise database search (Library), plain-English "Smart" meal
    (CLI: `supabase secrets set API_NINJAS_KEY=your_api_ninjas_key`)
 4. Reload the app while signed in — the API Ninjas features light up automatically.
 
+**Optional — wger key (higher rate limits):** the same edge function can attach your wger token. Add a second secret `WGER_API_KEY` = your wger key (from wger.de → Settings → API). When you're signed in, wger exercise/image calls are proxied through the function with the key; when signed out the app falls back to wger's free keyless endpoints. Nothing breaks if you skip this.
+
 > Free-tier notes: the **Nutrition** endpoint returns core macros (calories, protein, carbs, fat). The **Recipe** endpoint may require an API Ninjas premium key — if so, the Recipes page will simply show "no results." Everything degrades gracefully if the function isn't deployed yet.
 
 ---
