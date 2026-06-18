@@ -64,43 +64,79 @@ export const MEAL_LABEL: Record<MealType, string> = {
   breakfast: '🌅 Breakfast', lunch: '☀️ Lunch', dinner: '🌙 Dinner', snack: '🍎 Snacks & Drinks',
 }
 
-export interface SuggestedItem { item: MenuItem; protein: number; carbs: number; fat: number }
+export interface SuggestedItem { item: MenuItem; protein: number; carbs: number; fat: number; role: Role }
 export interface MenuSuggestion {
   picks: SuggestedItem[]
   totals: { calories: number; protein: number; carbs: number; fat: number }
 }
 
+/** Role of a dish in an Indian meal — drives sensible plate-building. */
+export type Role = 'base' | 'protein' | 'veg' | 'accompaniment' | 'fruit' | 'drink' | 'fried' | 'other'
+
+export function foodRole(name: string): Role {
+  const n = name.toLowerCase()
+  if (/tea|coffee|\bmilk\b|buttermilk|juice|jaljeera|jeera|lassi/.test(n)) return 'drink'
+  if (/chutney|thuvaiyal|thogayal|thokku|pickle|appalam|papad|malli|podi/.test(n)) return 'accompaniment'
+  if (/rasam|kuzhambu/.test(n)) return 'accompaniment' // eaten over a base, not alone
+  if (/egg|omelette|omlet|paneer|chicken|fish|mutton|prawn/.test(n)) return 'protein'
+  if (/\bdal\b|dall|sambar|sambhar|rajma|chana|\bgram\b|peas|moong|toor|kootu/.test(n)) return 'protein'
+  if (/idli|dosa|kaldosa|poori|puri|chapathi|chapati|roti|naan|rice|pongal|upma|koozh|biryani|paratha|uttapam|bread|fermented/.test(n)) return 'base'
+  if (/poriyal|masala|aloo|potato|beetroot|cabbage|cauliflower|sabzi|sabji|\bveg\b/.test(n)) return 'veg'
+  if (/banana|guava|muskmelon|melon|apple|orange|fruit|grape/.test(n)) return 'fruit'
+  if (/vada|suzhiyam|boondhi|bajji|bonda|pakoda/.test(n)) return 'fried'
+  return 'other'
+}
+
+interface Cand { it: MenuItem; protein: number; carbs: number; fat: number; role: Role }
+function enrich(items: MenuItem[]): Cand[] {
+  return items.map((it) => ({ it, role: foodRole(it.name), ...estimateMacros(it.name, it.calories) }))
+}
+
+/** Build one balanced plate (base + protein + veg + a side) within a calorie budget. */
+function buildPlate(cands: Cand[], budget: number): Cand[] {
+  const plate: Cand[] = []
+  const used = new Set<string>()
+  let cal = 0
+  const fits = (c: Cand, slack = 60) => cal + c.it.calories <= budget + slack
+  const take = (c?: Cand) => { if (c && !used.has(c.it.name) && fits(c)) { plate.push(c); used.add(c.it.name); cal += c.it.calories; return true } return false }
+  const byProtein = (a: Cand, b: Cand) => b.protein - a.protein
+  const of = (r: Role) => cands.filter((c) => c.role === r && !used.has(c.it.name)).sort(byProtein)
+
+  take(of('protein')[0])                 // 1) main protein (egg/paneer/dal/sambar)
+  take(of('base')[0])                    // 2) a base (rice/dosa/idli/roti)
+  take(of('veg')[0])                     // 3) a vegetable side
+  if (plate.some((p) => p.role === 'protein')) take(of('protein')[0]) // 4) 2nd protein if room (of() already excludes used)
+  // 5) one small accompaniment ONLY if there's a base to eat it with
+  if (plate.some((p) => p.role === 'base')) {
+    const acc = of('accompaniment').filter((c) => c.it.calories <= 130).sort((a, b) => a.it.calories - b.it.calories)[0]
+    take(acc)
+  }
+  if (!plate.length) take(of('base')[0] || of('fruit')[0] || cands[0]) // fallback
+  return plate
+}
+
 /**
- * Pick the best items from a day's menu for the user's calorie & protein
- * targets: favour protein density, fill toward the calorie target without
- * overshooting, keep some variety per meal, and avoid loading up on drinks.
+ * Indian-meal-aware suggestion: builds a proper plate (base + protein + veg + a
+ * paired side) for each meal toward the calorie/protein targets — never a lone
+ * chutney or appalam, and drinks/fried snacks are deprioritised.
  */
-export function suggestFromMenu(items: MenuItem[], calTarget: number, proteinTarget: number): MenuSuggestion {
-  const enriched = items.map((it) => {
-    const m = estimateMacros(it.name, it.calories)
-    const density = it.calories > 0 ? m.protein / it.calories : 0
-    const isDrink = /tea|coffee|juice|water|buttermilk|jaljeera/i.test(it.name)
-    return { it, ...m, density, isDrink }
-  })
-  // protein-dense first; drinks last; smaller items break ties
-  enriched.sort((a, b) => (b.density - a.density) || (a.it.calories - b.it.calories))
+export function suggestFromMenu(items: MenuItem[], calTarget: number, _proteinTarget: number): MenuSuggestion {
+  const order: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
+  const present = order.filter((m) => items.some((i) => i.meal === m && foodRole(i.name) !== 'drink'))
+  // weight calories across the meals that exist (snack gets little)
+  const rawW: Record<MealType, number> = { breakfast: 0.3, lunch: 0.4, dinner: 0.3, snack: 0.1 }
+  const totalW = present.reduce((s, m) => s + rawW[m], 0) || 1
 
   const picks: SuggestedItem[] = []
-  const perMeal: Record<string, number> = {}
-  let cal = 0, prot = 0, carbs = 0, fat = 0
-  const ceil = calTarget + 120
-
-  for (const e of enriched) {
-    if (e.isDrink && cal > 0) continue                 // at most consider drinks when nothing else
-    if ((perMeal[e.it.meal] || 0) >= 3) continue       // variety cap per meal
-    if (cal + e.it.calories > ceil) continue           // don't overshoot
-    picks.push({ item: e.it, protein: e.protein, carbs: e.carbs, fat: e.fat })
-    perMeal[e.it.meal] = (perMeal[e.it.meal] || 0) + 1
-    cal += e.it.calories; prot += e.protein; carbs += e.carbs; fat += e.fat
-    if (cal >= calTarget * 0.92 && prot >= proteinTarget * 0.9) break
+  for (const m of present) {
+    const budget = calTarget * (rawW[m] / totalW)
+    const plate = buildPlate(enrich(items.filter((i) => i.meal === m)), budget)
+    plate.forEach((c) => picks.push({ item: c.it, protein: c.protein, carbs: c.carbs, fat: c.fat, role: c.role }))
   }
-  // sort picks back into meal order for display
-  const order: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner']
+
+  const totals = picks.reduce((a, p) => ({
+    calories: a.calories + p.item.calories, protein: a.protein + p.protein, carbs: a.carbs + p.carbs, fat: a.fat + p.fat,
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 })
   picks.sort((a, b) => order.indexOf(a.item.meal) - order.indexOf(b.item.meal))
-  return { picks, totals: { calories: cal, protein: prot, carbs, fat } }
+  return { picks, totals }
 }

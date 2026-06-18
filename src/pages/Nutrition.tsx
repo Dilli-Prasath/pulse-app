@@ -266,7 +266,8 @@ function CanteenMenuCard() {
               <div className="flex flex-col gap-1.5">
                 {suggest.picks.map((p, i) => (
                   <div key={i} className="flex justify-between items-center p-2.5 rounded-lg text-sm" style={{ background: 'rgba(43,255,176,.06)', border: '1px solid rgba(43,255,176,.2)' }}>
-                    <span><b>{p.item.name}</b><span className="text-muted text-xs block">{MEAL_LABEL[p.item.meal]}</span></span>
+                    <span><b>{p.item.name}</b>
+                      <span className="text-muted text-xs block">{MEAL_LABEL[p.item.meal]} · <span className="capitalize" style={{ color: '#8b5cff' }}>{p.role === 'accompaniment' ? 'side' : p.role}</span></span></span>
                     <span className="text-right"><b className="text-green">{p.item.calories} kcal</b><span className="text-muted text-[11px] block">P{p.protein} C{p.carbs} F{p.fat}</span></span>
                   </div>
                 ))}
