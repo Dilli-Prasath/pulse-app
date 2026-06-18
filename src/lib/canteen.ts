@@ -1,5 +1,6 @@
 import { MenuItem, MealType } from './types'
 import { estimateMacros } from './macros'
+import { analyzeFood, Band } from './nutrition'
 
 /**
  * Parse a pasted office/canteen menu into {meal, name, calories} items.
@@ -64,10 +65,10 @@ export const MEAL_LABEL: Record<MealType, string> = {
   breakfast: '🌅 Breakfast', lunch: '☀️ Lunch', dinner: '🌙 Dinner', snack: '🍎 Snacks & Drinks',
 }
 
-export interface SuggestedItem { item: MenuItem; protein: number; carbs: number; fat: number; role: Role }
+export interface SuggestedItem { item: MenuItem; protein: number; carbs: number; fat: number; role: Role; score: number; band: Band }
 export interface MenuSuggestion {
   picks: SuggestedItem[]
-  totals: { calories: number; protein: number; carbs: number; fat: number }
+  totals: { calories: number; protein: number; carbs: number; fat: number; score: number; band: Band }
 }
 
 /** Role of a dish in an Indian meal — drives sensible plate-building. */
@@ -87,31 +88,45 @@ export function foodRole(name: string): Role {
   return 'other'
 }
 
-interface Cand { it: MenuItem; protein: number; carbs: number; fat: number; role: Role }
+interface Cand { it: MenuItem; protein: number; carbs: number; fat: number; role: Role; score: number; band: Band }
 function enrich(items: MenuItem[]): Cand[] {
-  return items.map((it) => ({ it, role: foodRole(it.name), ...estimateMacros(it.name, it.calories) }))
+  return items.map((it) => {
+    const a = analyzeFood(it.name, it.calories)
+    return { it, role: foodRole(it.name), protein: a.macros.protein, carbs: a.macros.carbs, fat: a.macros.fat, score: a.score, band: a.band }
+  })
 }
 
-/** Build one balanced plate (base + protein + veg + a side) within a calorie budget. */
+/**
+ * Build one balanced plate (base + protein + veg + a side) within a calorie
+ * budget — now health-aware: within each role we prefer the higher health-score
+ * option (which already rewards steamed/whole-grain/lean and penalises
+ * fried/sweet), tie-breaking on protein. Deep-fried & sweet items are avoided
+ * unless nothing healthier exists.
+ */
 function buildPlate(cands: Cand[], budget: number): Cand[] {
   const plate: Cand[] = []
   const used = new Set<string>()
   let cal = 0
   const fits = (c: Cand, slack = 60) => cal + c.it.calories <= budget + slack
   const take = (c?: Cand) => { if (c && !used.has(c.it.name) && fits(c)) { plate.push(c); used.add(c.it.name); cal += c.it.calories; return true } return false }
-  const byProtein = (a: Cand, b: Cand) => b.protein - a.protein
-  const of = (r: Role) => cands.filter((c) => c.role === r && !used.has(c.it.name)).sort(byProtein)
+  // rank: health score first, then protein — so the plate is nutritious, not just high-protein
+  const byHealth = (a: Cand, b: Cand) => b.score - a.score || b.protein - a.protein
+  const wholesome = (c: Cand) => c.role !== 'fried' && c.score >= 30
+  const of = (r: Role) => cands.filter((c) => c.role === r && !used.has(c.it.name) && wholesome(c)).sort(byHealth)
 
-  take(of('protein')[0])                 // 1) main protein (egg/paneer/dal/sambar)
-  take(of('base')[0])                    // 2) a base (rice/dosa/idli/roti)
-  take(of('veg')[0])                     // 3) a vegetable side
-  if (plate.some((p) => p.role === 'protein')) take(of('protein')[0]) // 4) 2nd protein if room (of() already excludes used)
+  take(of('protein')[0])                 // 1) best protein (egg/paneer/dal/sambar)
+  take(of('base')[0])                    // 2) best base (prefer idli/millet/brown over fried)
+  take(of('veg')[0])                     // 3) a vegetable side (fibre & micros)
+  if (plate.some((p) => p.role === 'protein')) take(of('protein')[0]) // 4) 2nd protein if room
   // 5) one small accompaniment ONLY if there's a base to eat it with
   if (plate.some((p) => p.role === 'base')) {
     const acc = of('accompaniment').filter((c) => c.it.calories <= 130).sort((a, b) => a.it.calories - b.it.calories)[0]
     take(acc)
   }
-  if (!plate.length) take(of('base')[0] || of('fruit')[0] || cands[0]) // fallback
+  if (!plate.length) { // fallback: best available wholesome item, else anything
+    const best = cands.filter((c) => !used.has(c.it.name)).sort(byHealth)[0]
+    take(best || cands[0])
+  }
   return plate
 }
 
@@ -131,12 +146,16 @@ export function suggestFromMenu(items: MenuItem[], calTarget: number, _proteinTa
   for (const m of present) {
     const budget = calTarget * (rawW[m] / totalW)
     const plate = buildPlate(enrich(items.filter((i) => i.meal === m)), budget)
-    plate.forEach((c) => picks.push({ item: c.it, protein: c.protein, carbs: c.carbs, fat: c.fat, role: c.role }))
+    plate.forEach((c) => picks.push({ item: c.it, protein: c.protein, carbs: c.carbs, fat: c.fat, role: c.role, score: c.score, band: c.band }))
   }
 
-  const totals = picks.reduce((a, p) => ({
+  const base = picks.reduce((a, p) => ({
     calories: a.calories + p.item.calories, protein: a.protein + p.protein, carbs: a.carbs + p.carbs, fat: a.fat + p.fat,
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 })
+  // calorie-weighted average health score of the suggested plate
+  const tw = picks.reduce((s, p) => s + Math.max(40, p.item.calories), 0) || 1
+  const score = Math.round(picks.reduce((s, p) => s + p.score * Math.max(40, p.item.calories), 0) / tw)
+  const band: Band = score >= 72 ? 'great' : score >= 55 ? 'good' : score >= 40 ? 'moderate' : 'limit'
   picks.sort((a, b) => order.indexOf(a.item.meal) - order.indexOf(b.item.meal))
-  return { picks, totals }
+  return { picks, totals: { ...base, score, band } }
 }

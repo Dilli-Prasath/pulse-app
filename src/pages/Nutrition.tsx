@@ -11,8 +11,24 @@ import { DIET_PLANS, planTotals, DietPlan } from '../lib/dietPlans'
 import { parseCanteenMenu, MEAL_LABEL, suggestFromMenu, MenuSuggestion } from '../lib/canteen'
 import { menuForToday } from '../lib/canteenData'
 import { estimateMacros } from '../lib/macros'
+import { analyzeFood, dayReport, enrichFood, FoodHealth, BAND_COLOR } from '../lib/nutrition'
 import { MealType, Meal, MenuItem } from '../lib/types'
-import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown, UtensilsCrossed, Check, Building2, Plus, Minus } from 'lucide-react'
+import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown, UtensilsCrossed, Check, Building2, Plus, Minus, HeartPulse, Database } from 'lucide-react'
+
+const STATUS_COLOR: Record<string, string> = { good: '#2bffb0', low: '#ffcf5c', high: '#ff5d7a', warn: '#ffcf5c' }
+
+/** Compact health badge: grade chip + 0–100 score (+ optional top reason). Hover shows why. */
+function HealthPill({ h, showLabel }: { h: FoodHealth; showLabel?: boolean }) {
+  const c = BAND_COLOR[h.band]
+  const title = [...h.pros.map((p) => '+ ' + p), ...h.cons.map((p) => '– ' + p)].join('\n') + (h.enriched ? '\n(refined with food database)' : '')
+  return (
+    <span title={title} className="inline-flex items-center gap-1 rounded-full pl-0.5 pr-1.5 py-0.5 text-[10px] font-bold align-middle shrink-0"
+      style={{ background: c + '1f', color: c, border: `1px solid ${c}55` }}>
+      <span className="grid place-items-center rounded-full font-black" style={{ width: 15, height: 15, background: c, color: '#06080f' }}>{h.grade}</span>
+      {h.score}{showLabel && h.labels[0] ? <span className="font-semibold opacity-90"> · {h.labels[0]}</span> : null}
+    </span>
+  )
+}
 
 const MEAL_ICON: Record<MealType, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' }
 
@@ -83,6 +99,8 @@ export default function Nutrition() {
         </Card>
       </div>
 
+      <NutritionScoreCard />
+
       <WaterCard />
 
       <CanteenMenuCard />
@@ -119,6 +137,7 @@ export default function Nutrition() {
                           <b className="text-[14px] block truncate">{meal.name}</b>
                           <span className="text-[11px] text-muted">P{meal.protein} · C{meal.carbs} · F{meal.fat}</span>
                         </div>
+                        <HealthPill h={analyzeFood(meal.name, meal.calories, { protein: meal.protein, carbs: meal.carbs, fat: meal.fat })} />
                         <div className="font-extrabold text-right shrink-0 tabular-nums">{meal.calories}<span className="text-[10px] text-muted font-semibold ml-0.5">kcal</span></div>
                         <button className="text-muted hover:text-red shrink-0 p-1" onClick={() => delMeal(meal.id)}><Trash2 size={15} /></button>
                       </div>
@@ -137,6 +156,109 @@ export default function Nutrition() {
 
       {open && <MealModal onClose={() => setOpen(false)} onSave={(meal) => { addMeal(meal); showToast('Meal logged 🍽️'); setOpen(false) }} />}
     </>
+  )
+}
+
+function NutritionScoreCard() {
+  const d = useStore((s) => s.data)
+  const showToast = useStore((s) => s.showToast)
+  const t = today()
+  const meals = mealsOn(d, t)
+  const targets = { calories: calorieTarget(d), protein: proteinTarget(d), carbs: carbTarget(d), fat: fatTarget(d) }
+
+  // optional Open Food Facts refinement, keyed by meal id
+  const [enriched, setEnriched] = useState<Record<string, { fiber: number; sugar: number; sodium: number; satFat: number }>>({})
+  const [busy, setBusy] = useState(false)
+
+  const dayMeals = meals.map((mm) => ({ name: mm.name, calories: mm.calories, protein: mm.protein, carbs: mm.carbs, fat: mm.fat, ...(enriched[mm.id] || {}) }))
+  const rep = dayReport(dayMeals, targets, d.profile.sex)
+  const anyEnriched = Object.keys(enriched).length > 0
+
+  async function refine() {
+    if (!meals.length) return
+    setBusy(true)
+    const next: Record<string, { fiber: number; sugar: number; sodium: number; satFat: number }> = {}
+    await Promise.all(meals.map(async (mm) => {
+      const a = await enrichFood(mm.name, mm.calories, { protein: mm.protein, carbs: mm.carbs, fat: mm.fat })
+      if (a.enriched) next[mm.id] = { fiber: a.micros.fiber, sugar: a.micros.sugar, sodium: a.micros.sodium, satFat: a.micros.satFat }
+    }))
+    setEnriched(next)
+    setBusy(false)
+    const n = Object.keys(next).length
+    showToast(n ? `Refined ${n} food${n > 1 ? 's' : ''} with real database values 🔬` : 'No database matches — using PULSE estimates')
+  }
+
+  const c = BAND_COLOR[rep.band]
+
+  return (
+    <Card className="mt-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <div className="h3 flex items-center gap-2"><HeartPulse size={16} className="text-pink" /> Today's Nutrition Score</div>
+        {meals.length > 0 && (
+          <button className="btn btn-sm" disabled={busy} onClick={refine} title="Refine fibre/sugar/sodium with Open Food Facts">
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Database size={13} />}
+            {anyEnriched ? 'Refined' : 'Refine with database'}
+          </button>
+        )}
+      </div>
+
+      {meals.length === 0 ? (
+        <div className="text-muted text-sm">Log meals to get a real-time nutrition grade — protein, fibre, sugar, sodium and saturated-fat judgement, plus coaching for your goal.</div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="shrink-0">
+              <Ring pct={rep.score} color={c} label="score" center={<span className="flex flex-col items-center leading-none"><b className="text-[26px]" style={{ color: c }}>{rep.score}</b><span className="text-[10px] text-muted font-semibold">/100</span></span>} />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <div className="flex items-center gap-2">
+                <span className="grid place-items-center rounded-lg font-black text-[15px]" style={{ width: 30, height: 30, background: c, color: '#06080f' }}>{rep.grade}</span>
+                <b className="text-[15px]">{rep.summary}</b>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {([['🥗 Veg', rep.groups.veg], ['🍎 Fruit', rep.groups.fruit], ['🫘 Dal/Protein', rep.groups.protein], ['🌾 Whole grain', rep.groups.wholeGrain], ['🥛 Dairy', rep.groups.dairy]] as [string, boolean][]).map(([lbl, ok]) => (
+                  <span key={lbl} className="text-[10.5px] font-semibold rounded-full px-2 py-0.5" style={{ background: ok ? 'rgba(43,255,176,.12)' : 'rgba(120,160,255,.07)', color: ok ? '#2bffb0' : '#7d89a8', border: `1px solid ${ok ? 'rgba(43,255,176,.3)' : 'rgba(120,160,255,.15)'}` }}>{ok ? '✓ ' : ''}{lbl}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* nutrient metrics */}
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
+            {rep.metrics.map((mt) => {
+              const sc = STATUS_COLOR[mt.status]
+              return (
+                <div key={mt.key} className="rounded-xl p-2.5" style={{ background: 'rgba(6,8,15,.45)', border: '1px solid rgba(120,160,255,.12)' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted font-semibold">{mt.label}</span>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: sc }} />
+                  </div>
+                  <div className="text-[15px] font-extrabold mt-0.5">{mt.value}<span className="text-[10px] text-muted font-semibold ml-0.5">{mt.unit}</span>
+                    {mt.target ? <span className="text-[10px] text-muted2 font-medium"> / {mt.target}</span> : null}</div>
+                  <div className="text-[10.5px] mt-0.5" style={{ color: sc }}>{mt.detail}</div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* coaching */}
+          {rep.coaching.length > 0 && (
+            <div className="rounded-xl p-3" style={{ background: 'rgba(139,92,255,.07)', border: '1px solid rgba(139,92,255,.2)' }}>
+              <div className="text-[11px] font-bold text-violet mb-1.5 flex items-center gap-1.5"><Sparkles size={12} /> Coaching</div>
+              <ul className="flex flex-col gap-1">
+                {rep.coaching.map((tip, i) => (
+                  <li key={i} className="text-[12.5px] text-txt flex gap-1.5"><span className="text-violet">›</span>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="text-[10.5px] text-muted2">
+            Judged by PULSE's Indian-food nutrition engine — rewards dals, vegetables, millets, steamed tiffin, curd, lean protein & fruit; flags fried, sweets, refined maida and high sodium. Fibre/sugar/sodium are estimates{anyEnriched ? ', partly refined with Open Food Facts' : ' (tap "Refine with database" for real values where matched)'}. Targets follow Mifflin–St Jeor, ISSN protein, and WHO/FDA sugar–sodium guidance. Not medical advice.
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
 
@@ -255,7 +377,11 @@ function CanteenMenuCard() {
       {suggest && (
         <Modal title="🎯 Best picks for your goal" onClose={() => setSuggest(null)}>
           <div className="mt-2 max-h-[68vh] overflow-y-auto pr-1">
-            <div className="text-muted text-[13px] mb-3">From today's canteen menu, optimised for your target of <b className="text-txt">{calTgt} kcal</b> and <b className="text-txt">{protTgt}g protein</b> — protein-first, without overshooting.</div>
+            <div className="text-muted text-[13px] mb-3">From today's canteen menu, optimised for your target of <b className="text-txt">{calTgt} kcal</b> and <b className="text-txt">{protTgt}g protein</b> — nutrition-first (balanced, protein-rich, low fried/sugar), without overshooting.</div>
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl" style={{ background: BAND_COLOR[suggest.totals.band] + '14', border: `1px solid ${BAND_COLOR[suggest.totals.band]}44` }}>
+              <span className="grid place-items-center rounded-lg font-black text-[13px] shrink-0" style={{ width: 28, height: 28, background: BAND_COLOR[suggest.totals.band], color: '#06080f' }}>{suggest.totals.score}</span>
+              <span className="text-[12.5px]"><b style={{ color: BAND_COLOR[suggest.totals.band] }}>Plate health {suggest.totals.score}/100</b> — these picks favour dals, veg, steamed & lean items over fried and sweet.</span>
+            </div>
             <div className="grid grid-cols-4 gap-2 mb-3">
               {[['Calories', suggest.totals.calories], ['Protein', suggest.totals.protein + 'g'], ['Carbs', suggest.totals.carbs + 'g'], ['Fat', suggest.totals.fat + 'g']].map(([l, v]) => (
                 <div key={l as string} className="rounded-xl p-2.5 text-center" style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
@@ -266,9 +392,9 @@ function CanteenMenuCard() {
               <div className="flex flex-col gap-1.5">
                 {suggest.picks.map((p, i) => (
                   <div key={i} className="flex justify-between items-center p-2.5 rounded-lg text-sm" style={{ background: 'rgba(43,255,176,.06)', border: '1px solid rgba(43,255,176,.2)' }}>
-                    <span><b>{p.item.name}</b>
+                    <span className="min-w-0"><span className="flex items-center gap-1.5 flex-wrap"><b>{p.item.name}</b><span className="grid place-items-center rounded-full font-black text-[9px] shrink-0" style={{ width: 14, height: 14, background: BAND_COLOR[p.band], color: '#06080f' }}>{p.score}</span></span>
                       <span className="text-muted text-xs block">{MEAL_LABEL[p.item.meal]} · <span className="capitalize" style={{ color: '#8b5cff' }}>{p.role === 'accompaniment' ? 'side' : p.role}</span></span></span>
-                    <span className="text-right"><b className="text-green">{p.item.calories} kcal</b><span className="text-muted text-[11px] block">P{p.protein} C{p.carbs} F{p.fat}</span></span>
+                    <span className="text-right shrink-0"><b className="text-green">{p.item.calories} kcal</b><span className="text-muted text-[11px] block">P{p.protein} C{p.carbs} F{p.fat}</span></span>
                   </div>
                 ))}
               </div>
@@ -287,6 +413,7 @@ function MenuRow({ item, onLog }: { item: MenuItem; onLog: (qty: number) => void
     <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
       <div className="flex-1 min-w-0"><b className="text-[13.5px] block truncate">{item.name}</b>
         <span className="text-muted text-[11px]">{item.calories} kcal{qty !== 1 ? ` × ${qty} = ${item.calories * qty}` : ''}</span></div>
+      <HealthPill h={analyzeFood(item.name, item.calories)} />
       <div className="flex items-center gap-1 shrink-0">
         <button className="btn btn-sm px-2" onClick={() => setQty(Math.max(1, qty - 1))}><Minus size={12} /></button>
         <span className="w-5 text-center text-sm font-bold">{qty}</span>
@@ -630,6 +757,17 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
             Total for <b>{qty}×</b>: <b className="text-cyan">{Math.round((+vals.calories || 0) * (+qty || 1))} kcal</b> · P{Math.round((+vals.protein || 0) * (+qty || 1))} C{Math.round((+vals.carbs || 0) * (+qty || 1))} F{Math.round((+vals.fat || 0) * (+qty || 1))}
           </div>
         )}
+        {name.trim() && +vals.calories > 0 && (() => {
+          const h = analyzeFood(name, +vals.calories, { protein: +vals.protein || undefined, carbs: +vals.carbs || undefined, fat: +vals.fat || undefined })
+          return (
+            <div className="mt-2.5 px-3 py-2.5 rounded-lg" style={{ background: BAND_COLOR[h.band] + '12', border: `1px solid ${BAND_COLOR[h.band]}40` }}>
+              <div className="flex items-center gap-2"><HealthPill h={h} showLabel /><span className="text-[12px] font-semibold" style={{ color: BAND_COLOR[h.band] }}>Health check</span></div>
+              {(h.pros.length > 0 || h.cons.length > 0) && (
+                <div className="text-[11.5px] text-muted mt-1.5">{[...h.pros, ...h.cons].slice(0, 2).join(' · ')}</div>
+              )}
+            </div>
+          )
+        })()}
         <div className="mt-3.5 mb-1"><label className="label">Date</label>
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <button className="btn btn-sm w-full mt-3" onClick={saveAsCustom}>★ Save as my custom food (reuse later)</button>

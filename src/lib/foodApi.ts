@@ -72,6 +72,41 @@ export async function searchFoods(query: string, signal?: AbortSignal): Promise<
   }
 }
 
+/** Real per-100g nutrients (incl. fibre/sugar/sodium/sat-fat) for enrichment. */
+export interface OffNutrients {
+  kcal: number; protein: number; carbs: number; fat: number
+  fiber: number; sugar: number; sodium: number; satFat: number
+}
+
+/**
+ * Look up the best matching product and return its real micronutrients per
+ * 100g. Used to *refine* the engine's estimates with database values when a
+ * food matches. Returns null on no match / network error (engine stays as the
+ * fallback). Indian dishes often won't match — that's expected and fine.
+ */
+export async function fetchNutrients(query: string, signal?: AbortSignal): Promise<OffNutrients | null> {
+  const q = query.trim().replace(/^\d+(\.\d+)?\s*[x×]\s*/i, '') // drop "2× "
+  if (q.length < 2) return null
+  const url = `${SEARCH}?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=5&fields=product_name,nutriments`
+  try {
+    const res = await fetch(url, { signal })
+    if (!res.ok) return null
+    const json = await res.json()
+    const p = (json.products || []).find((x: any) => (x.nutriments || {})['energy-kcal_100g'] > 0)
+    if (!p) return null
+    const n = p.nutriments || {}
+    const sodium = n.sodium_100g != null ? num(n.sodium_100g) * 1000 : (n.salt_100g != null ? Math.round(num(n.salt_100g) * 1000 * 0.4) : 0)
+    return {
+      kcal: num(n['energy-kcal_100g']),
+      protein: num(n.proteins_100g), carbs: num(n.carbohydrates_100g), fat: num(n.fat_100g),
+      fiber: num(n.fiber_100g), sugar: num(n.sugars_100g),
+      sodium, satFat: num(n['saturated-fat_100g']),
+    }
+  } catch {
+    return null
+  }
+}
+
 /** Look up a single product by its barcode number. */
 export async function lookupBarcode(code: string): Promise<FoodResult | null> {
   const c = code.replace(/\D/g, '')
