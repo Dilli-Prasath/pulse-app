@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { Card, Stat, Modal, Empty, Tag, PageHeader } from '../components/ui'
 import { useNavigate } from 'react-router-dom'
 import { ExerciseImage } from '../components/ExerciseImage'
+import { ExerciseDetail } from '../components/ExerciseDetail'
 import { Combobox } from '../components/Combobox'
 import { GuidedSession } from '../components/GuidedSession'
 import { EXERCISE_LIBRARY } from '../lib/exerciseLibrary'
@@ -18,6 +19,7 @@ interface ExRow { id: string; name: string; setsReps: string; weight: string }
 
 const EXERCISE_NAMES = [...new Set(EXERCISE_LIBRARY.map((e) => e.name))].sort()
 const NAME_SUGGESTIONS = ['Push Day', 'Pull Day', 'Leg Day', 'Upper Body', 'Lower Body', 'Full Body', 'Chest & Triceps', 'Back & Biceps', 'Shoulders & Arms', 'Core & Abs', 'Morning Run', 'Cardio', 'HIIT']
+const PREVIEW_SIZES = [{ key: 'S', px: 72 }, { key: 'M', px: 120 }, { key: 'L', px: 180 }, { key: 'XL', px: 260 }, { key: 'XXL', px: 360 }]
 
 export default function Workouts() {
   const d = useStore((s) => s.data)
@@ -28,8 +30,12 @@ export default function Workouts() {
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState(params.get('add') === '1')
   const [guided, setGuided] = useState(false)
+  const [detail, setDetail] = useState<string | null>(null)
+  const [preview, setPreview] = useState(() => localStorage.getItem('pulse_workout_preview') || 'M')
+  const pSize = PREVIEW_SIZES.find((s) => s.key === preview)?.px || 120
   const nav = useNavigate()
   const sess = todaySession(d)
+  useEffect(() => { localStorage.setItem('pulse_workout_preview', preview) }, [preview])
 
   const list = [...d.workouts].sort((a, b) => b.date.localeCompare(a.date))
   const pr = prs(d)
@@ -63,15 +69,28 @@ export default function Workouts() {
               <div className="text-muted text-xs">{sess.program.name} · {sess.mode === 'circuit' ? `${sess.items.length}-move circuit` : `${sess.items.length} exercises`} · ~{sess.estMin} min</div></div>
             <button className="btn btn-primary" onClick={() => setGuided(true)}><Play size={15} /> Start guided</button>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {sess.items.map((e) => (
-              <div key={e.name} className="flex items-center gap-2 pr-3 rounded-xl" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
-                <ExerciseImage name={e.name} size={40} rounded={10} />
-                <div className="text-xs"><b className="block">{e.name}</b><span className="text-muted">{sess.mode === 'circuit' ? `${e.seconds}s` : `${e.sets}×${e.reps}`}</span></div>
-              </div>
+
+          {/* image size control */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[11px] text-muted uppercase tracking-wide">View</span>
+            {PREVIEW_SIZES.map((s) => (
+              <button key={s.key} onClick={() => setPreview(s.key)}
+                className={`px-2.5 py-1 rounded-lg text-[12px] font-bold border ${preview === s.key ? 'text-white border-line2' : 'text-muted border-line'}`}
+                style={preview === s.key ? { background: 'linear-gradient(135deg,rgba(34,227,255,.2),rgba(139,92,255,.2))' } : undefined}>{s.key}</button>
             ))}
           </div>
-          <div className="text-[11px] text-muted2 mt-2 flex items-center gap-1"><Sparkles size={11} /> Auto-planned & timed. Tap “Start guided” — it walks you through each move with a clock and shows what's next.</div>
+
+          <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fill,minmax(${pSize + 24}px,1fr))` }}>
+            {sess.items.map((e) => (
+              <button key={e.name} onClick={() => setDetail(e.name)} className="rounded-xl p-2 text-center transition hover:-translate-y-0.5"
+                style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
+                <div className="flex justify-center"><ExerciseImage name={e.name} size={pSize} rounded={12} zoomable={false} /></div>
+                <b className="text-[12.5px] block mt-1.5 leading-tight">{e.name}</b>
+                <span className="text-muted text-[11px]">{sess.mode === 'circuit' ? `${e.seconds}s` : `${e.sets}×${e.reps}`}</span>
+              </button>
+            ))}
+          </div>
+          <div className="text-[11px] text-muted2 mt-2 flex items-center gap-1"><Sparkles size={11} /> Auto-planned & timed. Tap an exercise for its full guide, or “Start guided” to be walked through it.</div>
         </Card>
       )}
 
@@ -125,6 +144,8 @@ export default function Workouts() {
       </Card>
 
       {open && <WorkoutModal onClose={close} onSave={(w) => { addWorkout(w); showToast('Workout logged 💪'); close() }} />}
+
+      {detail && <ExerciseDetail name={detail} onClose={() => setDetail(null)} />}
 
       {guided && sess && !sess.rest && (
         <GuidedSession title={`${sess.program.name} — ${sess.focus}`} items={sess.items} mode={sess.mode}

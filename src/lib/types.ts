@@ -88,6 +88,7 @@ export interface Achievement {
 }
 
 export interface WaterEntry { date: string; ml: number }
+export interface CustomFood { name: string; serving: string; calories: number; protein: number; carbs: number; fat: number }
 export interface MeasurementEntry {
   id: string
   date: string
@@ -101,7 +102,7 @@ export interface MeasurementEntry {
 export type Accent = 'aurora' | 'cyan' | 'violet' | 'sunset' | 'emerald'
 export type WeightUnit = 'kg' | 'lb'
 export type ExerciseSource = 'auto' | 'ninja' | 'wger'
-export type FoodSource = 'auto' | 'ninja' | 'off'
+export type FoodSource = 'auto' | 'ninja' | 'off' | 'static'
 
 export interface Settings {
   accent: Accent
@@ -121,5 +122,6 @@ export interface AppData {
   inbody: InBodyEntry[]
   water: WaterEntry[]
   measurements: MeasurementEntry[]
+  customFoods: CustomFood[]
   settings: Settings
 }

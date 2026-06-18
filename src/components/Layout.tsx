@@ -1,18 +1,21 @@
-import { useEffect, useRef } from 'react'
-import { NavLink, useLocation, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, Dumbbell, Apple, LineChart, Users, ListChecks, Sparkles, User2,
-  Cloud, CloudOff, RefreshCw, BookOpen, ChefHat, Settings as SettingsIcon, Target,
+  Cloud, CloudOff, RefreshCw, BookOpen, ChefHat, Settings as SettingsIcon, Target, MoreHorizontal, X,
 } from 'lucide-react'
 import { useStore } from '../lib/store'
 
-const NAV = [
+// Core, everyday destinations shown prominently. Everything else is secondary.
+const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/programs', label: 'Programs', icon: Target },
   { to: '/workouts', label: 'Workouts', icon: Dumbbell },
   { to: '/nutrition', label: 'Nutrition', icon: Apple },
-  { to: '/recipes', label: 'Recipes', icon: ChefHat },
   { to: '/body', label: 'Body', icon: LineChart },
+]
+const MORE_NAV = [
+  { to: '/programs', label: 'Programs', icon: Target },
+  { to: '/recipes', label: 'Recipes', icon: ChefHat },
   { to: '/library', label: 'Library', icon: BookOpen },
   { to: '/routines', label: 'Routines', icon: ListChecks },
   { to: '/coach', label: 'AI Coach', icon: Sparkles },
@@ -43,26 +46,14 @@ export function Toast() {
   )
 }
 
-const LAST_ROUTE_KEY = 'pulse_last_route'
-
 export function Layout() {
   const loc = useLocation()
-  const nav = useNavigate()
   const name = useStore((s) => s.data.profile.name)
   const avatar = useStore((s) => s.data.profile.avatar)
-  const restored = useRef(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
-  // Remember the user's location and restore it on a fresh app open.
-  useEffect(() => {
-    if (restored.current) return
-    restored.current = true
-    const saved = localStorage.getItem(LAST_ROUTE_KEY)
-    if (loc.pathname === '/' && saved && saved !== '/') nav(saved, { replace: true })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (loc.pathname && loc.pathname !== '/') localStorage.setItem(LAST_ROUTE_KEY, loc.pathname)
-  }, [loc.pathname])
+  // Close the mobile "More" sheet whenever the route changes.
+  useEffect(() => { setMoreOpen(false) }, [loc.pathname])
 
   return (
     <div className="flex min-h-screen">
@@ -75,7 +66,7 @@ export function Layout() {
             <span className="block text-[9px] tracking-[4px] text-muted">FITNESS OS</span></div>
         </div>
         <div className="flex-1 flex flex-col gap-1 overflow-y-auto">
-          {NAV.map((n) => (
+          {PRIMARY_NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 lg:px-3.5 py-2.5 rounded-xl font-semibold text-sm transition border ${
@@ -83,6 +74,17 @@ export function Layout() {
                 }`}
               style={({ isActive }) => isActive ? { background: 'linear-gradient(135deg,rgba(34,227,255,.16),rgba(139,92,255,.16))' } : undefined}>
               <n.icon size={20} className="shrink-0" />{n.label}
+            </NavLink>
+          ))}
+          <div className="text-[10px] text-muted2 uppercase tracking-widest px-3 pt-4 pb-1">More</div>
+          {MORE_NAV.map((n) => (
+            <NavLink key={n.to} to={n.to}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 lg:px-3.5 py-2 rounded-xl font-semibold text-[13px] transition border ${
+                  isActive ? 'text-white border-line2' : 'text-muted border-transparent hover:text-txt hover:bg-[rgba(120,160,255,.06)]'
+                }`}
+              style={({ isActive }) => isActive ? { background: 'linear-gradient(135deg,rgba(34,227,255,.16),rgba(139,92,255,.16))' } : undefined}>
+              <n.icon size={18} className="shrink-0" />{n.label}
             </NavLink>
           ))}
         </div>
@@ -102,15 +104,40 @@ export function Layout() {
         <div key={loc.pathname} className="animate-fade"><Outlet /></div>
       </main>
 
-      {/* Mobile nav — horizontally scrollable so every page is reachable */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex overflow-x-auto no-scrollbar px-1 pt-2 pb-2.5"
+      {/* Mobile "More" sheet */}
+      {moreOpen && (
+        <div className="md:hidden fixed inset-0 z-[60] flex items-end" style={{ background: 'rgba(3,5,12,.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setMoreOpen(false)}>
+          <div className="w-full rounded-t-3xl p-4 pb-6 animate-pop" style={{ background: '#0a0e1a', borderTop: '1px solid rgba(120,160,255,.22)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="h3">More</div>
+              <button className="btn btn-sm" onClick={() => setMoreOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {MORE_NAV.map((n) => (
+                <NavLink key={n.to} to={n.to}
+                  className={({ isActive }) => `flex flex-col items-center gap-1.5 py-3 rounded-xl text-[11px] font-semibold ${isActive ? 'text-cyan' : 'text-muted'}`}
+                  style={({ isActive }) => isActive ? { background: 'rgba(34,227,255,.1)' } : { background: 'rgba(120,160,255,.05)' }}>
+                  <n.icon size={22} />{n.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile bottom nav — 5 primary tabs + More */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 px-1 pt-2 pb-2.5"
         style={{ background: 'rgba(10,14,26,.94)', backdropFilter: 'blur(16px)', borderTop: '1px solid rgba(120,160,255,.22)' }}>
-        {NAV.map((n) => (
+        {PRIMARY_NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end}
-            className={({ isActive }) => `flex flex-col items-center gap-0.5 text-[9.5px] font-bold px-3 py-1 shrink-0 min-w-[64px] ${isActive ? 'text-cyan' : 'text-muted'}`}>
+            className={({ isActive }) => `flex flex-col items-center gap-0.5 text-[9.5px] font-bold py-1 ${isActive ? 'text-cyan' : 'text-muted'}`}>
             <n.icon size={21} />{n.label}
           </NavLink>
         ))}
+        <button onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-0.5 text-[9.5px] font-bold py-1 ${moreOpen ? 'text-cyan' : 'text-muted'}`}>
+          <MoreHorizontal size={21} />More
+        </button>
       </nav>
       <Toast />
     </div>

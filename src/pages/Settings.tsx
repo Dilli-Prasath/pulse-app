@@ -82,16 +82,17 @@ export default function Settings() {
           <b className="text-muted">Auto</b> uses API Ninjas and instantly falls back to wger if it errors or hits its daily limit.
         </div>
 
-        <label className="label">Food database</label>
+        <label className="label">Food database (whole app)</label>
         <Segmented<FoodSource> value={s.foodSource}
           options={[
+            { value: 'static', label: 'Static · Indian', hint: 'Tamil Nadu + North · offline' },
+            { value: 'off', label: 'Open Food Facts', hint: 'global · free' },
+            { value: 'ninja', label: 'API Ninjas', hint: 'NLP' },
             { value: 'auto', label: 'Auto', hint: 'Ninjas → OFF' },
-            { value: 'ninja', label: 'API Ninjas', hint: 'smart NLP' },
-            { value: 'off', label: 'Open Food Facts', hint: 'free · unlimited' },
           ]}
           onChange={(v) => set({ foodSource: v }, 'Food source updated')} />
         <div className="text-[11px] text-muted2 mt-2">
-          Affects the <b className="text-muted">Smart</b> meal logger. Barcode + search always use Open Food Facts.
+          <b className="text-muted">Static · Indian</b> opens the meal logger on the built-in Tamil Nadu + North Indian food list and your saved custom foods — no internet needed. Other options use online databases for the Smart/Search tabs.
         </div>
       </Card>
     </>

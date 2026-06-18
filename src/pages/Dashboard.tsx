@@ -7,6 +7,9 @@ import {
   totalLost, goalProgress, macrosOn, proteinTarget, carbTarget, fatTarget, fmtDate, last7Days,
 } from '../lib/calcs'
 import { dispWeight, wLabel } from '../lib/units'
+import { todaySession } from '../lib/session'
+import { waterToday } from '../lib/calcs'
+import { Dumbbell, ChevronRight } from 'lucide-react'
 
 export default function Dashboard() {
   const d = useStore((s) => s.data)
@@ -33,7 +36,30 @@ export default function Dashboard() {
           style={{ background: 'rgba(18,24,42,.66)', border: '1px solid rgba(120,160,255,.22)' }}>
           <span className="w-1.5 h-1.5 rounded-full bg-green shadow-[0_0_10px_#2bffb0]" />{streak(d)} day streak</div>} />
 
+      {/* Today's session — the one thing to do now */}
+      {(() => {
+        const sess = todaySession(d)
+        if (!sess) return (
+          <Card className="mb-4 card-glow"><div className="flex items-center justify-between gap-3 flex-wrap">
+            <div><div className="h3">🎯 Get started</div><div className="text-muted text-sm mt-1">Pick a goal program for a guided daily plan.</div></div>
+            <button className="btn btn-primary" onClick={() => nav('/programs')}>Choose program</button></div></Card>
+        )
+        return (
+          <Card className="mb-4 card-glow"><div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-grad grid place-items-center shadow-glowViolet shrink-0"><Dumbbell size={20} /></div>
+              <div><div className="h3">Today · {sess.weekday}</div>
+                <div className="text-[15px] font-extrabold mt-0.5">{sess.program.emoji} {sess.rest ? 'Rest day 😴' : sess.focus}</div>
+                {!sess.rest && <div className="text-muted text-xs">{sess.mode === 'circuit' ? `${sess.items.length}-move circuit` : `${sess.items.length} exercises`} · ~{sess.estMin} min</div>}</div>
+            </div>
+            {!sess.rest && <button className="btn btn-primary" onClick={() => nav('/workouts')}>Start workout <ChevronRight size={15} /></button>}
+          </div></Card>
+        )
+      })()}
+
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
+        <Stat label="Water" value={(waterToday(d) / 1000).toFixed(1)} unit={`/ ${((d.settings.waterTargetMl || 3000) / 1000).toFixed(1)} L`}
+          sub={<span className="text-cyan">💧 stay hydrated</span>} />
         <Stat label="Current Weight" value={dispWeight(w, unit).toFixed(1)} unit={wLabel(unit)}
           sub={<span className={lost >= 0 ? 'text-cyan' : 'text-amber'}>{lost >= 0 ? '▼' : '▲'} {Math.abs(dispWeight(lost, unit))} {wLabel(unit)} from start</span>} />
         <Stat label="BMI" value={b.toFixed(1)} sub={<span style={{ color: bc }}>● {bl}</span>} />

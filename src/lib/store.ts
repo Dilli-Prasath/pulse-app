@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry } from './types'
+import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry, CustomFood } from './types'
 import { emptyAccount, uid } from './seed'
 import { supabase, cloudConfigured, TABLE } from './supabase'
 import type { Session } from '@supabase/supabase-js'
@@ -30,6 +30,7 @@ function migrate(d: Partial<AppData>): AppData {
     inbody: d.inbody ?? [],
     water: d.water ?? [],
     measurements: d.measurements ?? [],
+    customFoods: d.customFoods ?? [],
     settings: { ...base.settings, ...(d.settings || {}) },
   }
 }
@@ -65,6 +66,7 @@ interface StoreState {
   logSession: (w: Omit<Workout, 'id'>) => void
   delWorkout: (id: string) => void
   addMeal: (m: Omit<Meal, 'id'>) => void
+  setDayMeals: (date: string, meals: Omit<Meal, 'id'>[]) => void
   delMeal: (id: string) => void
   logWeight: (e: WeightEntry) => void
   addFriend: (f: Omit<Friend, 'id'>) => void
@@ -77,6 +79,8 @@ interface StoreState {
   addInbody: (e: Omit<InBodyEntry, 'id'>) => void
   importInbody: (rows: Omit<InBodyEntry, 'id'>[]) => void
   delInbody: (id: string) => void
+  addCustomFood: (f: CustomFood) => void
+  delCustomFood: (name: string) => void
   logWater: (ml: number) => void
   addMeasurement: (m: Omit<MeasurementEntry, 'id'>) => void
   delMeasurement: (id: string) => void
@@ -184,6 +188,11 @@ export const useStore = create<StoreState>((set, get) => ({
   }),
   delWorkout: (id) => get().update((d) => { d.workouts = d.workouts.filter((x) => x.id !== id) }),
   addMeal: (m) => get().update((d) => { d.meals.push({ ...m, id: uid() }) }),
+  // Replace all of a day's meals (used by "apply diet plan").
+  setDayMeals: (date, meals) => get().update((d) => {
+    d.meals = d.meals.filter((m) => m.date !== date)
+    meals.forEach((m) => d.meals.push({ ...m, id: uid() }))
+  }),
   delMeal: (id) => get().update((d) => { d.meals = d.meals.filter((x) => x.id !== id) }),
   logWeight: (e) => get().update((d) => {
     const ex = d.weights.find((w) => w.date === e.date)
@@ -210,6 +219,10 @@ export const useStore = create<StoreState>((set, get) => ({
     d.inbody.sort((a, b) => a.date.localeCompare(b.date))
   }),
   delInbody: (id) => get().update((d) => { d.inbody = d.inbody.filter((x) => x.id !== id) }),
+  addCustomFood: (f) => get().update((d) => {
+    d.customFoods = [{ ...f }, ...d.customFoods.filter((x) => x.name.toLowerCase() !== f.name.toLowerCase())]
+  }),
+  delCustomFood: (name) => get().update((d) => { d.customFoods = d.customFoods.filter((x) => x.name !== name) }),
   logWater: (ml) => get().update((d) => {
     const today = new Date().toISOString().slice(0, 10)
     const ex = d.water.find((w) => w.date === today)

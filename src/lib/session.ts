@@ -51,13 +51,13 @@ function musclesForFocus(focus: string): string[] {
 }
 const isCardio = (focus: string) => /cardio|hiit|run|walk|step|conditioning|spin|cycle|swim/i.test(focus)
 
+// Bodyweight HIIT circuit — every move has a verified static image.
 const HIIT_CIRCUIT: SessionItem[] = [
-  { name: 'Jumping Jacks', howto: 'Jump feet out while raising arms overhead, then back. Keep a steady fast pace.', seconds: 40 },
-  { name: 'Bodyweight Squat', howto: 'Sit back and down keeping chest up, drive through heels. Fast but controlled.', seconds: 40 },
-  { name: 'Push Up', howto: 'Body in a straight line, lower until elbows ~90°, press up. Drop to knees if needed.', seconds: 40 },
-  { name: 'Mountain Climbers', howto: 'In a plank, drive knees to chest alternately, fast. Keep hips low.', seconds: 40 },
-  { name: 'Walking Lunge', howto: 'Step forward and drop the back knee toward the floor; alternate legs.', seconds: 40 },
-  { name: 'Plank', howto: 'Forearms down, body straight, brace your core and hold.', seconds: 40 },
+  { name: 'Bodyweight Squat', muscle: 'Legs', howto: 'Sit back and down keeping chest up, drive through heels. Fast but controlled.', seconds: 40 },
+  { name: 'Push Up', muscle: 'Chest', howto: 'Body in a straight line, lower until elbows ~90°, press up. Drop to knees if needed.', seconds: 40 },
+  { name: 'Walking Lunge', muscle: 'Legs', howto: 'Step forward and drop the back knee toward the floor; alternate legs continuously.', seconds: 40 },
+  { name: 'Glute Bridge', muscle: 'Glutes', howto: 'Lie on your back, drive hips up squeezing the glutes, lower under control. Repeat fast.', seconds: 40 },
+  { name: 'Plank', muscle: 'Core', howto: 'Forearms down, body straight, brace your core and hold the whole interval.', seconds: 40 },
 ]
 
 export function buildStrength(program: Program, focus: string): SessionItem[] {

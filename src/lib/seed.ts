@@ -66,6 +66,7 @@ export function emptyAccount(): AppData {
     inbody: [],
     water: [],
     measurements: [],
+    customFoods: [],
     settings: { accent: 'aurora', weightUnit: 'kg', exerciseSource: 'auto', foodSource: 'auto', waterTargetMl: 3000 },
   }
 }

@@ -7,8 +7,9 @@ import { searchFoods, lookupBarcode, FoodResult } from '../lib/foodApi'
 import { parseNutrition, ParsedNutrition, ninjaConfigured } from '../lib/apiNinjas'
 import { exportNutrition } from '../lib/shareExport'
 import { ocrImage } from '../lib/ocr'
+import { DIET_PLANS, planTotals, DietPlan } from '../lib/dietPlans'
 import { MealType, Meal } from '../lib/types'
-import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown } from 'lucide-react'
+import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown, UtensilsCrossed, Check } from 'lucide-react'
 
 const MEAL_ICON: Record<MealType, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' }
 
@@ -61,6 +62,8 @@ export default function Nutrition() {
       </div>
 
       <WaterCard />
+
+      <DietPlansCard />
 
       <Card className="mt-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -123,6 +126,79 @@ function WaterCard() {
   )
 }
 
+function DietPlansCard() {
+  const setDayMeals = useStore((s) => s.setDayMeals)
+  const showToast = useStore((s) => s.showToast)
+  const [preview, setPreview] = useState<DietPlan | null>(null)
+  const [filter, setFilter] = useState<'all' | 'veg' | 'nonveg'>('all')
+
+  const plans = DIET_PLANS.filter((p) => filter === 'all' ? true : filter === 'veg' ? p.veg : !p.veg)
+
+  function apply(p: DietPlan) {
+    setDayMeals(today(), p.items.map((it) => ({ date: today(), mealType: it.meal, name: it.name, calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat })))
+    showToast(`${p.name} loaded into today — review & edit below ✅`)
+    setPreview(null)
+  }
+
+  return (
+    <Card className="mt-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <div className="h3 flex items-center gap-2"><UtensilsCrossed size={15} className="text-pink" /> Indian Diet Plans</div>
+        <div className="flex gap-2">
+          {([['all', 'All'], ['veg', 'Veg'], ['nonveg', 'Non-veg']] as const).map(([k, l]) => (
+            <span key={k} className={`chip ${filter === k ? 'chip-on' : ''}`} onClick={() => setFilter(k)} style={{ fontSize: 12, padding: '4px 10px' }}>{l}</span>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))' }}>
+        {plans.map((p) => {
+          const t = planTotals(p)
+          return (
+            <div key={p.id} className="p-3.5 rounded-xl" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <b className="text-[14.5px]">{p.name}</b>
+                <span className="tag bg-[rgba(120,160,255,.12)] text-muted">{p.goal}</span>
+              </div>
+              <div className="text-muted text-xs mt-1">{p.blurb}</div>
+              <div className="flex gap-2 mt-2 text-[11px]">
+                <b className="text-green">{t.calories} kcal</b><span className="text-muted">P{t.protein} · C{t.carbs} · F{t.fat}</span>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button className="btn btn-sm flex-1 justify-center" onClick={() => setPreview(p)}>View</button>
+                <button className="btn btn-sm btn-primary flex-1 justify-center" onClick={() => apply(p)}>Apply today</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="text-[11px] text-muted2 mt-2">Static, offline Indian plans with full macros. “Apply today” auto-fills your meals — then review & edit before saving.</div>
+
+      {preview && (
+        <Modal title={preview.name} onClose={() => setPreview(null)}>
+          <div className="mt-2 max-h-[68vh] overflow-y-auto pr-1">
+            <div className="text-muted text-sm mb-3">{preview.blurb}</div>
+            {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map((mt) => {
+              const its = preview.items.filter((x) => x.meal === mt)
+              if (!its.length) return null
+              return (
+                <div key={mt} className="mb-3">
+                  <div className="h3 mb-1.5">{({ breakfast: '🌅 Breakfast', lunch: '☀️ Lunch', snack: '🍎 Snack', dinner: '🌙 Dinner' })[mt]}</div>
+                  {its.map((it, i) => (
+                    <div key={i} className="flex justify-between text-[13px] py-1 border-b border-line">
+                      <span>{it.name}</span><span className="text-muted">{it.calories} kcal · P{it.protein} C{it.carbs} F{it.fat}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+            <button className="btn btn-primary w-full mt-2" onClick={() => apply(preview)}><Check size={15} /> Apply to today</button>
+          </div>
+        </Modal>
+      )}
+    </Card>
+  )
+}
+
 type Source = 'smart' | 'scan' | 'online' | 'quick' | 'barcode' | 'manual'
 
 function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<Meal, 'id'> & { id: string }) => void }) {
@@ -131,8 +207,13 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
   const [vals, setVals] = useState({ calories: '', protein: '', carbs: '', fat: '' })
   const [date, setDate] = useState(today())
   const foodSource = useStore((s) => s.data.settings.foodSource)
-  const smartAvailable = foodSource !== 'off'
-  const [source, setSource] = useState<Source>(smartAvailable && ninjaConfigured ? 'smart' : 'online')
+  const customFoods = useStore((s) => s.data.customFoods)
+  const addCustomFood = useStore((s) => s.addCustomFood)
+  const delCustomFood = useStore((s) => s.delCustomFood)
+  const smartAvailable = foodSource === 'auto' || foodSource === 'ninja'
+  const [source, setSource] = useState<Source>(
+    foodSource === 'static' ? 'quick' : foodSource === 'off' ? 'online' : (smartAvailable && ninjaConfigured ? 'smart' : 'quick'),
+  )
 
   // smart (NLP) mode
   const [sq, setSq] = useState('')
@@ -196,6 +277,12 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
   }, [q, source])
 
   const quick = q.trim() ? FOOD_DB.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : FOOD_DB.slice(0, 8)
+  const customMatches = q.trim() ? customFoods.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())) : customFoods.slice(0, 6)
+
+  function saveAsCustom() {
+    if (!name.trim() || !(+vals.calories)) { alert('Enter a name and calories first'); return }
+    addCustomFood({ name: name.trim(), serving: '1 serving', calories: +vals.calories || 0, protein: +vals.protein || 0, carbs: +vals.carbs || 0, fat: +vals.fat || 0 })
+  }
 
   function fillLocal(f: FoodItem) {
     setName(`${f.name} (${f.serving})`)
@@ -315,9 +402,18 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
           <>
             <div className="relative mb-2">
               <Search size={15} className="absolute left-3 top-3 text-muted" />
-              <input className="input pl-9" placeholder="Common foods (incl. Indian)…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input className="input pl-9" placeholder="My foods + Indian (Tamil Nadu & North)…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <div className="flex flex-col gap-1.5 mb-3 max-h-[200px] overflow-y-auto">
+            <div className="flex flex-col gap-1.5 mb-3 max-h-[220px] overflow-y-auto">
+              {customMatches.map((f) => (
+                <div key={'c' + f.name} className="flex justify-between items-center p-2.5 rounded-lg text-sm"
+                  style={{ background: 'rgba(139,92,255,.08)', border: '1px solid rgba(139,92,255,.25)' }}>
+                  <button className="flex-1 text-left" onClick={() => fillLocal(f)}>
+                    <b>★ {f.name}</b><span className="text-muted text-xs block">{f.serving} · my food</span></button>
+                  <span className="text-cyan font-bold mr-2">{f.calories} kcal</span>
+                  <button className="text-muted hover:text-red" onClick={() => delCustomFood(f.name)}><Trash2 size={13} /></button>
+                </div>
+              ))}
               {quick.map((f) => (
                 <button key={f.name} onClick={() => fillLocal(f)}
                   className="flex justify-between items-center p-2.5 rounded-lg text-left text-sm hover:bg-[rgba(120,160,255,.08)]"
@@ -355,7 +451,8 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
         </div>
         <div className="mt-3.5 mb-1"><label className="label">Date</label>
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        <button className="btn btn-primary w-full mt-4" onClick={() => {
+        <button className="btn btn-sm w-full mt-3" onClick={saveAsCustom}>★ Save as my custom food (reuse later)</button>
+        <button className="btn btn-primary w-full mt-2" onClick={() => {
           if (!name.trim()) return alert('Pick a food or enter a name')
           onSave({ id: uid(), date, mealType, name: name.trim(), calories: +vals.calories || 0, protein: +vals.protein || 0, carbs: +vals.carbs || 0, fat: +vals.fat || 0 })
         }}>Save Meal</button>
