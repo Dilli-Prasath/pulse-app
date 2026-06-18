@@ -25,11 +25,11 @@ You need **Node.js 18+** ([download](https://nodejs.org)).
 
 ```bash
 cd pulse-app
-npm install      # installs ALL dependencies — required after any pull/dep change
+npm install --registry https://registry.npmjs.org      # installs ALL dependencies — required after any pull/dep change
 npm run dev      # starts http://localhost:5173
 ```
 
-> **Important:** run `npm install` whenever `package.json` changes (e.g. after `git pull`). If you only `git pull` and run `npm run dev`, you'll get *"Failed to resolve import …"* errors — that just means a package isn't installed yet.
+> **Important:** run `npm install --registry https://registry.npmjs.org` whenever `package.json` changes (e.g. after `git pull`). If you only `git pull` and run `npm run dev`, you'll get *"Failed to resolve import …"* errors — that just means a package isn't installed yet.
 
 The app works **fully offline** (data saved in your browser) until you turn on cloud sync.
 
