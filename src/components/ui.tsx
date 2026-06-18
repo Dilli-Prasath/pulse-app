@@ -1,8 +1,26 @@
-import { ReactNode, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { ReactNode, useEffect, useState } from 'react'
+import { X, ChevronDown } from 'lucide-react'
 
 export function Card({ children, glow = true, className = '' }: { children: ReactNode; glow?: boolean; className?: string }) {
   return <div className={`card ${glow ? 'card-glow' : ''} ${className}`}>{children}</div>
+}
+
+/** Collapsible section. `title` and optional `right` show in the toggle header. */
+export function Accordion({ title, right, defaultOpen = true, children }:
+  { title: ReactNode; right?: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div>
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between gap-2 py-1.5 group">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${open ? '' : '-rotate-90'}`} />
+          <div className="min-w-0">{title}</div>
+        </div>
+        {right}
+      </button>
+      {open && <div className="mt-1.5">{children}</div>}
+    </div>
+  )
 }
 
 export function Stat({ label, value, unit, sub, color = '#e8eefc' }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; color?: string }) {

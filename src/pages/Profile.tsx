@@ -75,7 +75,7 @@ export default function Profile() {
           <div className="mt-3.5"><label className="label">Activity Level</label>
             <select className="input" value={p.activity} onChange={(e) => setP({ ...p, activity: +e.target.value })}>
               <option value={1.2}>Sedentary (desk job)</option><option value={1.375}>Light (1-3 days/wk)</option>
-              <option value={1.55}>Moderate (3-5 days/wk)</option><option value={1.725}>Active (6-7 days/wk)</option></select></div>
+              <option value={1.55}>Moderate (3-5 days/wk)</option><option value={1.725}>Active (6-7 days/wk)</option><option value={1.9}>Extremely active (hard daily + job)</option></select></div>
         </Card>
       </div>
 

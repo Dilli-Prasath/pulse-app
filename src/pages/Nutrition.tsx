@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
-import { Card, Ring, Bar, Modal, Empty, PageHeader } from '../components/ui'
-import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget, fatTarget, waterToday } from '../lib/calcs'
+import { Card, Ring, Bar, Modal, Empty, PageHeader, Accordion } from '../components/ui'
+import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget, fatTarget, waterToday, tdee } from '../lib/calcs'
 import { today, uid, FOOD_DB, FoodItem } from '../lib/seed'
 import { searchFoods, lookupBarcode, FoodResult } from '../lib/foodApi'
 import { parseNutrition, ParsedNutrition, ninjaConfigured } from '../lib/apiNinjas'
@@ -46,14 +46,15 @@ export default function Nutrition() {
 
   return (
     <>
-      <PageHeader title="Nutrition" sub={`Daily target ${tgt} kcal · ${d.profile.goalRate} kg/week plan`}
+      <PageHeader title="Nutrition" sub={`Maintenance ${Math.round(tdee(d))} kcal · daily target ${tgt} kcal · ${d.profile.goalRate} kg/week`}
         action={<button className="btn btn-primary" onClick={() => setOpen(true)}>+ Log Meal</button>} />
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-[1fr_1.6fr]">
         <Card><div className="h3 mb-2">Calories Today</div>
           <div className="flex flex-col items-center text-center mt-1">
             <Ring pct={tgt ? (cals / tgt) * 100 : 0} color={cals <= tgt ? '#2bffb0' : '#ffcf5c'} label="consumed" center={cals} />
-            <div className="mt-3 text-[13px] text-muted">
+            <div className="text-[11px] text-muted2 mt-2">Maintenance <b className="text-violet">{Math.round(tdee(d))} kcal</b> · target {tgt}</div>
+            <div className="mt-1.5 text-[13px] text-muted">
               {cals <= tgt ? <><b className="text-green">{tgt - cals} kcal</b> remaining</> : <><b className="text-amber">{cals - tgt} kcal</b> over</>}
             </div></div></Card>
         <Card><div className="h3 mb-3">Macros</div>
@@ -87,14 +88,11 @@ export default function Nutrition() {
               if (!group.length) return null
               const sub = group.reduce((s, x) => s + (x.calories || 0), 0)
               return (
-                <div key={mt}>
-                  <div className="flex items-center justify-between mb-1.5 px-1">
-                    <div className="text-[12px] font-bold text-muted flex items-center gap-1.5">
-                      <span className="text-base">{MEAL_ICON[mt]}</span>{mt[0].toUpperCase() + mt.slice(1)}
-                      <span className="text-muted2 font-normal">· {group.length} item{group.length > 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="text-[12px] font-bold text-cyan">{sub} kcal</div>
-                  </div>
+                <Accordion key={mt}
+                  title={<div className="text-[12px] font-bold text-muted flex items-center gap-1.5">
+                    <span className="text-base">{MEAL_ICON[mt]}</span>{mt[0].toUpperCase() + mt.slice(1)}
+                    <span className="text-muted2 font-normal">· {group.length} item{group.length > 1 ? 's' : ''}</span></div>}
+                  right={<span className="text-[12px] font-bold text-cyan">{sub} kcal</span>}>
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(120,160,255,.12)' }}>
                     {group.map((meal, idx) => (
                       <div key={meal.id} className="flex items-center gap-3 px-3 py-2.5"
@@ -108,7 +106,7 @@ export default function Nutrition() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </Accordion>
               )
             })}
             <div className="flex items-center justify-between pt-1 px-1 border-t border-line">
@@ -214,12 +212,13 @@ function CanteenMenuCard() {
             const its = todayMenu.filter((x) => x.meal === m)
             if (!its.length) return null
             return (
-              <div key={m}>
-                <div className="text-[12px] font-bold text-muted mb-1.5">{MEAL_LABEL[m]}</div>
+              <Accordion key={m} defaultOpen={m === 'lunch' || m === 'breakfast'}
+                title={<span className="text-[12px] font-bold text-muted">{MEAL_LABEL[m]}</span>}
+                right={<span className="text-[11px] text-muted2">{its.length} items</span>}>
                 <div className="flex flex-col gap-1.5">
                   {its.map((it, i) => <MenuRow key={i} item={it} onLog={(qty) => logItem(it, qty)} />)}
                 </div>
-              </div>
+              </Accordion>
             )
           })}
         </div>

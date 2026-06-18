@@ -16,25 +16,58 @@ export function bmiLabel(b: number): [string, string] {
   if (b < 30) return ['Overweight', '#ffcf5c']
   return ['Obese', '#ff5d7a']
 }
+/** BMR — Mifflin–St Jeor equation (the most accurate validated predictive formula). */
 export function bmr(d: AppData): number {
   const p = d.profile
   const w = latestWeight(d)
   return 10 * w + 6.25 * p.heightCm - 5 * p.age + (p.sex === 'male' ? 5 : -161)
 }
+/** Maintenance / TDEE = BMR × activity factor. */
 export function tdee(d: AppData): number {
   return bmr(d) * d.profile.activity
 }
+/**
+ * Daily calorie target = maintenance − deficit (≈7700 kcal per kg).
+ * Safety floor: never below BMR, and never below 1500 kcal (men) / 1200 (women)
+ * — deeper deficits hurt adherence, muscle and hormones with no extra fat loss.
+ */
 export function calorieTarget(d: AppData): number {
-  return Math.round(tdee(d) - (d.profile.goalRate * 7700) / 7)
+  const raw = tdee(d) - (d.profile.goalRate * 7700) / 7
+  const floor = Math.max(bmr(d), d.profile.sex === 'male' ? 1500 : 1200)
+  return Math.round(Math.max(raw, floor))
 }
+
+/** Reference weight for protein: goal weight while cutting (avoids over-counting body fat), else current. */
+function refWeight(d: AppData): number {
+  const cur = latestWeight(d)
+  const tgt = d.profile.targetWeight
+  return tgt > 0 && tgt < cur ? tgt : cur
+}
+/**
+ * Protein target (ISSN). During a deficit, resistance-trained people retain
+ * the most lean mass at ~2.3–3.1 g/kg; we use 2.4 g/kg on reference (goal/lean)
+ * weight — high enough to spare muscle, scaled off lean weight so high-body-fat
+ * users aren't over-prescribed. Otherwise ~2.0 g/kg. Capped at 3.0 g/kg.
+ */
 export function proteinTarget(d: AppData): number {
-  return Math.round(latestWeight(d) * 1.8)
+  const inDeficit = calorieTarget(d) < tdee(d) - 50
+  const perKg = inDeficit ? 2.4 : 2.0
+  const w = refWeight(d)
+  return Math.round(Math.min(w * perKg, w * 3.0))
 }
-export function carbTarget(d: AppData): number {
-  return Math.round((calorieTarget(d) * 0.45) / 4)
-}
+/**
+ * Fat target: 0.9 g/kg (within the evidence-based 0.8–1.0 g/kg band for hormone
+ * health) with an absolute floor of 50 g (men) / 35 g (women) to avoid
+ * essential-fatty-acid deficiency on small/lean frames.
+ */
 export function fatTarget(d: AppData): number {
-  return Math.round((calorieTarget(d) * 0.27) / 9)
+  const floor = d.profile.sex === 'male' ? 50 : 35
+  return Math.round(Math.max(refWeight(d) * 0.9, floor))
+}
+/** Carbs fill the remaining calories so protein+carbs+fat = the calorie target. */
+export function carbTarget(d: AppData): number {
+  const remaining = calorieTarget(d) - proteinTarget(d) * 4 - fatTarget(d) * 9
+  return Math.max(0, Math.round(remaining / 4))
 }
 
 export const mealsOn = (d: AppData, date: string) => d.meals.filter((m) => m.date === date)

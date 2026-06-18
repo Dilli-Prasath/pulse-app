@@ -4,7 +4,7 @@ import { Card, Stat, Ring, Bar, PageHeader } from '../components/ui'
 import { LineArea } from '../components/charts'
 import {
   latestWeight, bmi, bmiLabel, caloriesOn, calorieTarget, workoutsThisWeek, streak,
-  totalLost, goalProgress, macrosOn, proteinTarget, carbTarget, fatTarget, fmtDate, last7Days,
+  totalLost, goalProgress, macrosOn, proteinTarget, carbTarget, fatTarget, fmtDate, last7Days, tdee,
 } from '../lib/calcs'
 import { dispWeight, wLabel } from '../lib/units'
 import { todaySession } from '../lib/session'
@@ -67,6 +67,8 @@ export default function Dashboard() {
           sub={<span className="text-violet">⚡ {d.workouts.length} all-time</span>} />
         <Stat label="Calories today" value={cals} unit={`/ ${tgt}`}
           sub={<span className={cals <= tgt ? 'text-green' : 'text-amber'}>{cals <= tgt ? 'On target' : 'Over budget'}</span>} />
+        <Stat label="Maintenance" value={Math.round(tdee(d))} unit="kcal" color="#8b5cff"
+          sub={<span className="text-muted">TDEE · target {tgt}</span>} />
       </div>
 
       <div className="grid gap-4 mt-4 grid-cols-1 lg:grid-cols-[2fr_1fr]">
