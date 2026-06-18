@@ -46,22 +46,40 @@ export default function Nutrition() {
 
   return (
     <>
-      <PageHeader title="Nutrition" sub={`Maintenance ${Math.round(tdee(d))} kcal · daily target ${tgt} kcal · ${d.profile.goalRate} kg/week`}
+      <PageHeader title="Nutrition" sub={`${d.profile.goalRate} kg/week plan · Mifflin–St Jeor`}
         action={<button className="btn btn-primary" onClick={() => setOpen(true)}>+ Log Meal</button>} />
+
+      {/* Energy targets */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="card card-glow text-center py-4">
+          <div className="text-[10px] uppercase tracking-widest text-muted mb-1">Maintenance</div>
+          <div className="text-[26px] font-extrabold text-violet leading-none">{Math.round(tdee(d))}</div>
+          <div className="text-[11px] text-muted mt-1">kcal · TDEE</div>
+        </div>
+        <div className="card card-glow text-center py-4">
+          <div className="text-[10px] uppercase tracking-widest text-muted mb-1">Daily Target</div>
+          <div className="text-[26px] font-extrabold text-green leading-none">{tgt}</div>
+          <div className="text-[11px] text-muted mt-1">kcal/day</div>
+        </div>
+        <div className="card card-glow text-center py-4">
+          <div className="text-[10px] uppercase tracking-widest text-muted mb-1">Daily Deficit</div>
+          <div className="text-[26px] font-extrabold text-cyan leading-none">−{Math.max(0, Math.round(tdee(d) - tgt))}</div>
+          <div className="text-[11px] text-muted mt-1">kcal · {d.profile.goalRate} kg/wk</div>
+        </div>
+      </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-[1fr_1.6fr]">
         <Card><div className="h3 mb-2">Calories Today</div>
           <div className="flex flex-col items-center text-center mt-1">
             <Ring pct={tgt ? (cals / tgt) * 100 : 0} color={cals <= tgt ? '#2bffb0' : '#ffcf5c'} label="consumed" center={cals} />
-            <div className="text-[11px] text-muted2 mt-2">Maintenance <b className="text-violet">{Math.round(tdee(d))} kcal</b> · target {tgt}</div>
-            <div className="mt-1.5 text-[13px] text-muted">
+            <div className="mt-3 text-[13px] text-muted">
               {cals <= tgt ? <><b className="text-green">{tgt - cals} kcal</b> remaining</> : <><b className="text-amber">{cals - tgt} kcal</b> over</>}
             </div></div></Card>
         <Card><div className="h3 mb-3">Macros</div>
           <Bar label="Protein" value={m.p} target={proteinTarget(d)} color="#22e3ff" />
           <Bar label="Carbs" value={m.c} target={carbTarget(d)} color="#8b5cff" />
           <Bar label="Fat" value={m.f} target={fatTarget(d)} color="#ff4fd8" />
-          <div className="text-muted text-[11.5px] mt-1.5">Protein target scales with bodyweight (1.8 g/kg) to preserve muscle in a deficit.</div>
+          <div className="text-muted text-[11.5px] mt-1.5">Protein 2.4 g/kg in a deficit (2.0 g/kg otherwise) to preserve muscle · fat 0.9 g/kg · carbs fill the rest.</div>
         </Card>
       </div>
 
