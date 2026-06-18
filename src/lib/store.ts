@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry, CustomFood } from './types'
+import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry, CustomFood, MenuItem } from './types'
 import { emptyAccount, uid } from './seed'
 import { supabase, cloudConfigured, TABLE } from './supabase'
 import type { Session } from '@supabase/supabase-js'
@@ -31,6 +31,7 @@ function migrate(d: Partial<AppData>): AppData {
     water: d.water ?? [],
     measurements: d.measurements ?? [],
     customFoods: d.customFoods ?? [],
+    menus: d.menus ?? {},
     settings: { ...base.settings, ...(d.settings || {}) },
   }
 }
@@ -81,6 +82,8 @@ interface StoreState {
   delInbody: (id: string) => void
   addCustomFood: (f: CustomFood) => void
   delCustomFood: (name: string) => void
+  setMenu: (date: string, items: MenuItem[]) => void
+  clearMenu: (date: string) => void
   logWater: (ml: number) => void
   addMeasurement: (m: Omit<MeasurementEntry, 'id'>) => void
   delMeasurement: (id: string) => void
@@ -223,6 +226,8 @@ export const useStore = create<StoreState>((set, get) => ({
     d.customFoods = [{ ...f }, ...d.customFoods.filter((x) => x.name.toLowerCase() !== f.name.toLowerCase())]
   }),
   delCustomFood: (name) => get().update((d) => { d.customFoods = d.customFoods.filter((x) => x.name !== name) }),
+  setMenu: (date, items) => get().update((d) => { d.menus[date] = items }),
+  clearMenu: (date) => get().update((d) => { delete d.menus[date] }),
   logWater: (ml) => get().update((d) => {
     const today = new Date().toISOString().slice(0, 10)
     const ex = d.water.find((w) => w.date === today)

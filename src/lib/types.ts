@@ -89,6 +89,7 @@ export interface Achievement {
 
 export interface WaterEntry { date: string; ml: number }
 export interface CustomFood { name: string; serving: string; calories: number; protein: number; carbs: number; fat: number }
+export interface MenuItem { meal: MealType; name: string; calories: number }
 export interface MeasurementEntry {
   id: string
   date: string
@@ -123,5 +124,7 @@ export interface AppData {
   water: WaterEntry[]
   measurements: MeasurementEntry[]
   customFoods: CustomFood[]
+  /** office/canteen menus keyed by date (YYYY-MM-DD) */
+  menus: Record<string, MenuItem[]>
   settings: Settings
 }

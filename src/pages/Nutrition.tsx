@@ -8,8 +8,10 @@ import { parseNutrition, ParsedNutrition, ninjaConfigured } from '../lib/apiNinj
 import { exportNutrition } from '../lib/shareExport'
 import { ocrImage } from '../lib/ocr'
 import { DIET_PLANS, planTotals, DietPlan } from '../lib/dietPlans'
-import { MealType, Meal } from '../lib/types'
-import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown, UtensilsCrossed, Check } from 'lucide-react'
+import { parseCanteenMenu, MEAL_LABEL, suggestFromMenu, MenuSuggestion } from '../lib/canteen'
+import { estimateMacros } from '../lib/macros'
+import { MealType, Meal, MenuItem } from '../lib/types'
+import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown, UtensilsCrossed, Check, Building2, Plus, Minus } from 'lucide-react'
 
 const MEAL_ICON: Record<MealType, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' }
 
@@ -62,6 +64,8 @@ export default function Nutrition() {
       </div>
 
       <WaterCard />
+
+      <CanteenMenuCard />
 
       <DietPlansCard />
 
@@ -123,6 +127,129 @@ function WaterCard() {
         </div>
       </div>
     </Card>
+  )
+}
+
+function CanteenMenuCard() {
+  const d = useStore((s) => s.data)
+  const menus = d.menus
+  const setMenu = useStore((s) => s.setMenu)
+  const clearMenu = useStore((s) => s.clearMenu)
+  const addMeal = useStore((s) => s.addMeal)
+  const showToast = useStore((s) => s.showToast)
+  const t = today()
+  const todayMenu = menus[t] || []
+  const [importOpen, setImportOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [suggest, setSuggest] = useState<MenuSuggestion | null>(null)
+
+  const calTgt = calorieTarget(d)
+  const protTgt = proteinTarget(d)
+
+  function logItem(it: MenuItem, qty: number) {
+    const m = estimateMacros(it.name, it.calories)
+    addMeal({ date: t, mealType: it.meal, name: qty !== 1 ? `${qty}× ${it.name}` : it.name,
+      calories: Math.round(it.calories * qty), protein: m.protein * qty, carbs: m.carbs * qty, fat: m.fat * qty })
+    showToast(`Logged ${it.name} ✅`)
+  }
+  function logAllPicks() {
+    if (!suggest) return
+    suggest.picks.forEach((p) => addMeal({ date: t, mealType: p.item.meal, name: p.item.name,
+      calories: p.item.calories, protein: p.protein, carbs: p.carbs, fat: p.fat }))
+    showToast(`Logged ${suggest.picks.length} recommended items 🎯`); setSuggest(null)
+  }
+
+  function doImport() {
+    const items = parseCanteenMenu(text)
+    if (!items.length) { showToast('Could not find any items — paste the full menu with calories'); return }
+    setMenu(t, items)
+    showToast(`Imported ${items.length} menu items for today 🍴`)
+    setImportOpen(false); setText('')
+  }
+
+  const meals: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner']
+
+  return (
+    <Card className="mt-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <div className="h3 flex items-center gap-2"><Building2 size={15} className="text-cyan" /> Office Canteen Menu · Today</div>
+        <div className="flex gap-2 flex-wrap">
+          {todayMenu.length > 0 && <button className="btn btn-sm" onClick={() => setSuggest(suggestFromMenu(todayMenu, calTgt, protTgt))}><Sparkles size={13} /> Suggest for my goal</button>}
+          {todayMenu.length > 0 && <button className="btn btn-sm btn-danger" onClick={() => clearMenu(t)}>Clear</button>}
+          <button className="btn btn-sm btn-primary" onClick={() => setImportOpen(true)}><Plus size={13} /> {todayMenu.length ? 'Re-import' : 'Paste menu'}</button>
+        </div>
+      </div>
+
+      {todayMenu.length === 0 ? (
+        <div className="text-muted text-sm">Paste your office menu (item + calories) and tap items to log what you ate — with quantity.</div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {meals.map((m) => {
+            const its = todayMenu.filter((x) => x.meal === m)
+            if (!its.length) return null
+            return (
+              <div key={m}>
+                <div className="text-[12px] font-bold text-muted mb-1.5">{MEAL_LABEL[m]}</div>
+                <div className="flex flex-col gap-1.5">
+                  {its.map((it, i) => <MenuRow key={i} item={it} onLog={(qty) => logItem(it, qty)} />)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {importOpen && (
+        <Modal title="Paste today's canteen menu" onClose={() => setImportOpen(false)}>
+          <div className="mt-4">
+            <p className="text-muted text-[13px] mb-2">Copy the whole menu (with calories) and paste below. I'll auto-detect each item, its calories, and the meal.</p>
+            <textarea className="input" rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Breakfast ( 08.00 AM – 10.30 AM )\n1\nIdli\n1 No\n60\n-\n...'} />
+            <button className="btn btn-primary w-full mt-3" onClick={doImport}>Import menu</button>
+          </div>
+        </Modal>
+      )}
+
+      {suggest && (
+        <Modal title="🎯 Best picks for your goal" onClose={() => setSuggest(null)}>
+          <div className="mt-2 max-h-[68vh] overflow-y-auto pr-1">
+            <div className="text-muted text-[13px] mb-3">From today's canteen menu, optimised for your target of <b className="text-txt">{calTgt} kcal</b> and <b className="text-txt">{protTgt}g protein</b> — protein-first, without overshooting.</div>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[['Calories', suggest.totals.calories], ['Protein', suggest.totals.protein + 'g'], ['Carbs', suggest.totals.carbs + 'g'], ['Fat', suggest.totals.fat + 'g']].map(([l, v]) => (
+                <div key={l as string} className="rounded-xl p-2.5 text-center" style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
+                  <div className="text-[17px] font-extrabold">{v}</div><div className="text-[10px] text-muted uppercase tracking-wide">{l}</div></div>
+              ))}
+            </div>
+            {suggest.picks.length === 0 ? <div className="text-muted text-sm">No suitable items found in today's menu.</div> : (
+              <div className="flex flex-col gap-1.5">
+                {suggest.picks.map((p, i) => (
+                  <div key={i} className="flex justify-between items-center p-2.5 rounded-lg text-sm" style={{ background: 'rgba(43,255,176,.06)', border: '1px solid rgba(43,255,176,.2)' }}>
+                    <span><b>{p.item.name}</b><span className="text-muted text-xs block">{MEAL_LABEL[p.item.meal]}</span></span>
+                    <span className="text-right"><b className="text-green">{p.item.calories} kcal</b><span className="text-muted text-[11px] block">P{p.protein} C{p.carbs} F{p.fat}</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {suggest.picks.length > 0 && <button className="btn btn-primary w-full mt-3" onClick={logAllPicks}><Check size={15} /> Log all picks to today</button>}
+          </div>
+        </Modal>
+      )}
+    </Card>
+  )
+}
+
+function MenuRow({ item, onLog }: { item: MenuItem; onLog: (qty: number) => void }) {
+  const [qty, setQty] = useState(1)
+  return (
+    <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
+      <div className="flex-1 min-w-0"><b className="text-[13.5px] block truncate">{item.name}</b>
+        <span className="text-muted text-[11px]">{item.calories} kcal{qty !== 1 ? ` × ${qty} = ${item.calories * qty}` : ''}</span></div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button className="btn btn-sm px-2" onClick={() => setQty(Math.max(1, qty - 1))}><Minus size={12} /></button>
+        <span className="w-5 text-center text-sm font-bold">{qty}</span>
+        <button className="btn btn-sm px-2" onClick={() => setQty(qty + 1)}><Plus size={12} /></button>
+      </div>
+      <button className="btn btn-sm btn-primary shrink-0" onClick={() => onLog(qty)}>Log</button>
+    </div>
   )
 }
 
@@ -205,6 +332,7 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
   const [mealType, setMealType] = useState<MealType>('breakfast')
   const [name, setName] = useState('')
   const [vals, setVals] = useState({ calories: '', protein: '', carbs: '', fat: '' })
+  const [qty, setQty] = useState('1')
   const [date, setDate] = useState(today())
   const foodSource = useStore((s) => s.data.settings.foodSource)
   const customFoods = useStore((s) => s.data.customFoods)
@@ -439,22 +567,35 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
           </div>
         )}
 
-        {/* editable fields — always shown so you can tweak before saving */}
+        {/* editable fields — per-serving values; Quantity multiplies them */}
         <div className="mb-3.5"><label className="label">Food</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Food name" /></div>
-        <div className="mb-3.5"><label className="label">Calories</label>
-          <input className="input" type="number" value={vals.calories} onChange={(e) => setVals({ ...vals, calories: e.target.value })} placeholder="kcal" /></div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="label">Calories / serving</label>
+            <input className="input" type="number" value={vals.calories} onChange={(e) => setVals({ ...vals, calories: e.target.value })} placeholder="kcal" /></div>
+          <div><label className="label">Quantity / servings</label>
+            <input className="input" type="number" step="0.25" min="0.25" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-3.5">
           <div><label className="label">Protein</label><input className="input" type="number" value={vals.protein} onChange={(e) => setVals({ ...vals, protein: e.target.value })} /></div>
           <div><label className="label">Carbs</label><input className="input" type="number" value={vals.carbs} onChange={(e) => setVals({ ...vals, carbs: e.target.value })} /></div>
           <div><label className="label">Fat</label><input className="input" type="number" value={vals.fat} onChange={(e) => setVals({ ...vals, fat: e.target.value })} /></div>
         </div>
+        {(+qty || 1) !== 1 && (
+          <div className="text-[12px] mt-2.5 px-3 py-2 rounded-lg" style={{ background: 'rgba(34,227,255,.08)', border: '1px solid rgba(34,227,255,.2)' }}>
+            Total for <b>{qty}×</b>: <b className="text-cyan">{Math.round((+vals.calories || 0) * (+qty || 1))} kcal</b> · P{Math.round((+vals.protein || 0) * (+qty || 1))} C{Math.round((+vals.carbs || 0) * (+qty || 1))} F{Math.round((+vals.fat || 0) * (+qty || 1))}
+          </div>
+        )}
         <div className="mt-3.5 mb-1"><label className="label">Date</label>
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <button className="btn btn-sm w-full mt-3" onClick={saveAsCustom}>★ Save as my custom food (reuse later)</button>
         <button className="btn btn-primary w-full mt-2" onClick={() => {
           if (!name.trim()) return alert('Pick a food or enter a name')
-          onSave({ id: uid(), date, mealType, name: name.trim(), calories: +vals.calories || 0, protein: +vals.protein || 0, carbs: +vals.carbs || 0, fat: +vals.fat || 0 })
+          const q = +qty || 1
+          const nm = q !== 1 ? `${q}× ${name.trim()}` : name.trim()
+          onSave({ id: uid(), date, mealType, name: nm,
+            calories: Math.round((+vals.calories || 0) * q), protein: Math.round((+vals.protein || 0) * q),
+            carbs: Math.round((+vals.carbs || 0) * q), fat: Math.round((+vals.fat || 0) * q) })
         }}>Save Meal</button>
       </div>
     </Modal>
