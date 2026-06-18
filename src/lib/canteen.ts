@@ -28,19 +28,34 @@ export function parseCanteenMenu(text: string): MenuItem[] {
   const items: MenuItem[] = []
   const seen = new Set<string>()
 
+  const push = (name: string | undefined, calStr: string | undefined) => {
+    if (!name || !calStr || !INT.test(calStr)) return
+    const nm = name.trim()
+    if (!nm || HEADER_WORDS.has(nm.toLowerCase()) || INT.test(nm)) return
+    const key = meal + '|' + nm.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    items.push({ meal, name: nm, calories: +calStr })
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (TIME_HEADER.test(line)) { meal = mealFor(line); continue }
-    if (QTY.test(line)) {
-      const name = lines[i - 1]
-      const calStr = lines[i + 1]
-      if (!name || !calStr || !INT.test(calStr)) continue
-      if (HEADER_WORDS.has(name.toLowerCase()) || INT.test(name)) continue
-      const key = meal + '|' + name.toLowerCase()
-      if (seen.has(key)) continue
-      seen.add(key)
-      items.push({ meal, name, calories: +calStr })
+
+    // Row form: a whole row on one line, split by tabs or 2+ spaces
+    //   "1<tab>Idli<tab>1 No<tab>60<tab>-"
+    const cells = line.split(/\t|\s{2,}/).map((c) => c.trim()).filter(Boolean)
+    if (cells.length >= 3) {
+      const qi = cells.findIndex((c) => QTY.test(c))
+      if (qi > 0 && cells[qi + 1] && INT.test(cells[qi + 1])) {
+        const start = INT.test(cells[0]) ? 1 : 0 // drop leading S.No
+        push(cells.slice(start, qi).join(' '), cells[qi + 1])
+        continue
+      }
     }
+
+    // Column form: each field on its own line
+    if (QTY.test(line)) push(lines[i - 1], lines[i + 1])
   }
   return items
 }

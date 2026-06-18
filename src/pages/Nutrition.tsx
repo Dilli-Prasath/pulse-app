@@ -9,6 +9,7 @@ import { exportNutrition } from '../lib/shareExport'
 import { ocrImage } from '../lib/ocr'
 import { DIET_PLANS, planTotals, DietPlan } from '../lib/dietPlans'
 import { parseCanteenMenu, MEAL_LABEL, suggestFromMenu, MenuSuggestion } from '../lib/canteen'
+import { menuForToday } from '../lib/canteenData'
 import { estimateMacros } from '../lib/macros'
 import { MealType, Meal, MenuItem } from '../lib/types'
 import { Trash2, Search, Barcode, Globe, ListPlus, Loader2, Sparkles, ScanLine, Image as ImageIcon, FileDown, UtensilsCrossed, Check, Building2, Plus, Minus } from 'lucide-react'
@@ -80,17 +81,40 @@ export default function Nutrition() {
           )}
         </div>
         {meals.length ? (
-          <div className="flex flex-col gap-2.5">
-            {meals.map((meal) => (
-              <div key={meal.id} className="flex items-center gap-3 sm:gap-3.5 p-3 rounded-xl"
-                style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
-                <div className="w-10 h-10 rounded-xl grid place-items-center text-lg shrink-0" style={{ background: 'rgba(120,160,255,.08)' }}>{MEAL_ICON[meal.mealType]}</div>
-                <div className="flex-1 min-w-0"><b className="text-[14.5px] block truncate">{meal.name}</b>
-                  <span className="text-xs text-muted">{meal.mealType} · P{meal.protein} C{meal.carbs} F{meal.fat}</span></div>
-                <div className="font-extrabold text-right shrink-0">{meal.calories}<span className="block text-[11px] text-muted font-semibold">kcal</span></div>
-                <button className="btn btn-sm btn-danger shrink-0" onClick={() => delMeal(meal.id)}><Trash2 size={14} /></button>
-              </div>
-            ))}
+          <div className="flex flex-col gap-4">
+            {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map((mt) => {
+              const group = meals.filter((x) => x.mealType === mt)
+              if (!group.length) return null
+              const sub = group.reduce((s, x) => s + (x.calories || 0), 0)
+              return (
+                <div key={mt}>
+                  <div className="flex items-center justify-between mb-1.5 px-1">
+                    <div className="text-[12px] font-bold text-muted flex items-center gap-1.5">
+                      <span className="text-base">{MEAL_ICON[mt]}</span>{mt[0].toUpperCase() + mt.slice(1)}
+                      <span className="text-muted2 font-normal">· {group.length} item{group.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="text-[12px] font-bold text-cyan">{sub} kcal</div>
+                  </div>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(120,160,255,.12)' }}>
+                    {group.map((meal, idx) => (
+                      <div key={meal.id} className="flex items-center gap-3 px-3 py-2.5"
+                        style={{ background: 'rgba(6,8,15,.35)', borderTop: idx ? '1px solid rgba(120,160,255,.08)' : 'none' }}>
+                        <div className="flex-1 min-w-0">
+                          <b className="text-[14px] block truncate">{meal.name}</b>
+                          <span className="text-[11px] text-muted">P{meal.protein} · C{meal.carbs} · F{meal.fat}</span>
+                        </div>
+                        <div className="font-extrabold text-right shrink-0 tabular-nums">{meal.calories}<span className="text-[10px] text-muted font-semibold ml-0.5">kcal</span></div>
+                        <button className="text-muted hover:text-red shrink-0 p-1" onClick={() => delMeal(meal.id)}><Trash2 size={15} /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+            <div className="flex items-center justify-between pt-1 px-1 border-t border-line">
+              <span className="text-sm font-bold">Day total</span>
+              <span className="text-base font-extrabold text-green">{cals} kcal · <span className="text-muted text-sm">P{Math.round(m.p)} C{Math.round(m.c)} F{Math.round(m.f)}</span></span>
+            </div>
           </div>
         ) : <Empty icon="🍽️" title="Nothing logged today" sub="Tap “Log Meal” to add food" />}
       </Card>
@@ -138,7 +162,9 @@ function CanteenMenuCard() {
   const addMeal = useStore((s) => s.addMeal)
   const showToast = useStore((s) => s.showToast)
   const t = today()
-  const todayMenu = menus[t] || []
+  const staticDay = menuForToday()
+  const todayMenu = menus[t] || staticDay.items
+  const officeLabel = !menus[t] ? `${staticDay.office}${staticDay.note ? ` · ${staticDay.note}` : ''}` : null
   const [importOpen, setImportOpen] = useState(false)
   const [text, setText] = useState('')
   const [suggest, setSuggest] = useState<MenuSuggestion | null>(null)
@@ -172,7 +198,7 @@ function CanteenMenuCard() {
   return (
     <Card className="mt-4">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
-        <div className="h3 flex items-center gap-2"><Building2 size={15} className="text-cyan" /> Office Canteen Menu · Today</div>
+        <div className="h3 flex items-center gap-2"><Building2 size={15} className="text-cyan" /> Canteen Menu · Today{officeLabel ? ` · ${officeLabel}` : ''}</div>
         <div className="flex gap-2 flex-wrap">
           {todayMenu.length > 0 && <button className="btn btn-sm" onClick={() => setSuggest(suggestFromMenu(todayMenu, calTgt, protTgt))}><Sparkles size={13} /> Suggest for my goal</button>}
           {todayMenu.length > 0 && <button className="btn btn-sm btn-danger" onClick={() => clearMenu(t)}>Clear</button>}
@@ -181,7 +207,7 @@ function CanteenMenuCard() {
       </div>
 
       {todayMenu.length === 0 ? (
-        <div className="text-muted text-sm">Paste your office menu (item + calories) and tap items to log what you ate — with quantity.</div>
+        <div className="text-muted text-sm">No menu for today. Tap <b className="text-txt">Paste menu</b> to add one (item + calories), then log what you ate with quantity.</div>
       ) : (
         <div className="flex flex-col gap-3">
           {meals.map((m) => {
