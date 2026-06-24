@@ -7,13 +7,14 @@ import { ExerciseImage } from '../components/ExerciseImage'
 import { ExerciseDetail } from '../components/ExerciseDetail'
 import { Combobox } from '../components/Combobox'
 import { GuidedSession } from '../components/GuidedSession'
-import { EXERCISE_LIBRARY } from '../lib/exerciseLibrary'
+import { ExercisePicker } from '../components/ExercisePicker'
+import { EXERCISE_LIBRARY, EXERCISE_BY_NAME, exerciseDef } from '../lib/exerciseLibrary'
 import { todaySession } from '../lib/session'
 import { totalVolume, prs, workoutsThisWeek, streak, fmtDate, latestWeight } from '../lib/calcs'
 import { today, uid } from '../lib/seed'
 import { caloriesBurned, ninjaConfigured } from '../lib/apiNinjas'
 import { WorkoutType, Exercise } from '../lib/types'
-import { Trash2, Loader2, Flame, Play, Sparkles } from 'lucide-react'
+import { Trash2, Loader2, Flame, Play, Sparkles, Dumbbell } from 'lucide-react'
 
 interface ExRow { id: string; name: string; setsReps: string; weight: string }
 
@@ -162,7 +163,22 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
   const [name, setName] = useState('')
   const [date, setDate] = useState(today())
   const [rows, setRows] = useState<ExRow[]>([{ id: uid(), name: '', setsReps: '3x10', weight: '' }])
+  const [picker, setPicker] = useState(false)
   const [cardio, setCardio] = useState({ duration: '', distance: '', calories: '' })
+
+  // Add an exercise (from the picker): fill the first empty row, else append. Sets/reps auto-fill.
+  function addExercise(name: string) {
+    setRows((rs) => {
+      const def = exerciseDef(name)
+      const empty = rs.find((r) => !r.name.trim())
+      if (empty) return rs.map((r) => r.id === empty.id ? { ...r, name, setsReps: def } : r)
+      return [...rs, { id: uid(), name, setsReps: def, weight: '' }]
+    })
+  }
+  // When a known exercise is chosen in a row, auto-fill its default sets/reps.
+  function setRowName(id: string, v: string) {
+    setRows((rs) => rs.map((x) => x.id === id ? { ...x, name: v, setsReps: EXERCISE_BY_NAME[v.trim()] ? exerciseDef(v) : x.setsReps } : x))
+  }
   const [activity, setActivity] = useState('')
   const [estBusy, setEstBusy] = useState(false)
   const [estMsg, setEstMsg] = useState<string | null>(null)
@@ -212,12 +228,15 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
 
         {type === 'strength' ? (
           <>
-            <label className="label">Exercises</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="label mb-0">Exercises</label>
+              <button className="btn btn-sm" onClick={() => setPicker(true)}><Dumbbell size={13} /> Browse by muscle</button>
+            </div>
             {rows.map((r) => (
               <div key={r.id} className="grid gap-2 mb-2 items-center" style={{ gridTemplateColumns: r.name.trim() ? '40px 1fr 90px 70px 32px' : '1fr 90px 70px 32px' }}>
                 {r.name.trim() && <ExerciseImage name={r.name} size={40} />}
                 <Combobox value={r.name} placeholder="Search exercise…" options={EXERCISE_NAMES}
-                  onChange={(v) => setRows(rows.map((x) => x.id === r.id ? { ...x, name: v } : x))} />
+                  onChange={(v) => setRowName(r.id, v)} />
                 <input className="input" placeholder="3x10" value={r.setsReps}
                   onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, setsReps: e.target.value } : x))} />
                 <input className="input" type="number" placeholder="kg" value={r.weight}
@@ -226,6 +245,7 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
               </div>
             ))}
             <button className="btn btn-sm mt-1" onClick={() => setRows([...rows, { id: uid(), name: '', setsReps: '3x10', weight: '' }])}>+ Add Exercise</button>
+            {picker && <ExercisePicker onPick={addExercise} onClose={() => setPicker(false)} />}
           </>
         ) : (
           <>

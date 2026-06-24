@@ -21,7 +21,7 @@ export default function Library() {
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<LibExercise | null>(null)
 
-  const muscles = useMemo(() => ['All', ...Array.from(new Set(EXERCISE_LIBRARY.map((e) => e.muscle)))], [])
+  const muscles = useMemo(() => ['All', ...Array.from(new Set(EXERCISE_LIBRARY.map((e) => e.category)))], [])
   const [muscle, setMuscle] = useState('All')
 
   // Online exercise search (API Ninjas with automatic wger fallback)
@@ -47,7 +47,7 @@ export default function Library() {
 
   const filtered = EXERCISE_LIBRARY.filter((e) =>
     (level === 'All' || e.level === level) &&
-    (muscle === 'All' || e.muscle === muscle) &&
+    (muscle === 'All' || e.category === muscle) &&
     (!q.trim() || e.name.toLowerCase().includes(q.toLowerCase())))
 
   function startTemplate(id: string) {
@@ -155,7 +155,7 @@ export default function Library() {
               <b className="text-[13px] block mt-2 leading-tight">{e.name}</b>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: LEVEL_COLOR[e.level] }} />
-                <span className="text-[11px] text-muted">{e.muscle}</span>
+                <span className="text-[11px] text-muted">{e.category}</span>
               </div>
             </button>
           ))}
