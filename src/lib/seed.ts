@@ -1,4 +1,5 @@
 import { AppData } from './types'
+import { INDIAN_FOOD_DB } from './foodDb'
 
 export const today = () => new Date().toISOString().slice(0, 10)
 export const uid = () => Math.random().toString(36).slice(2, 9)
@@ -79,7 +80,8 @@ export const seed = emptyAccount
 
 // Common foods database (per typical serving)
 export interface FoodItem { name: string; serving: string; calories: number; protein: number; carbs: number; fat: number }
-export const FOOD_DB: FoodItem[] = [
+
+const BASE_FOOD_DB: FoodItem[] = [
   { name: 'Grilled Chicken Breast', serving: '150g', calories: 248, protein: 46, carbs: 0, fat: 5 },
   { name: 'White Rice (cooked)', serving: '1 cup', calories: 205, protein: 4, carbs: 45, fat: 0 },
   { name: 'Brown Rice (cooked)', serving: '1 cup', calories: 218, protein: 5, carbs: 46, fat: 2 },
@@ -134,3 +136,20 @@ export const FOOD_DB: FoodItem[] = [
   { name: 'Poha', serving: '1 cup', calories: 250, protein: 5, carbs: 40, fat: 8 },
   { name: 'Roti + Dal (meal)', serving: '2 roti + 1 cup', calories: 440, protein: 20, carbs: 70, fat: 9 },
 ]
+
+/**
+ * Full searchable food list = base foods + the large Indian / Tamil Nadu /
+ * Bangladeshi / hotel database, de-duplicated by name (first match wins).
+ */
+function dedupeFoods(list: FoodItem[]): FoodItem[] {
+  const seen = new Set<string>()
+  const out: FoodItem[] = []
+  for (const f of list) {
+    const k = f.name.toLowerCase().trim()
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(f)
+  }
+  return out
+}
+export const FOOD_DB: FoodItem[] = dedupeFoods([...BASE_FOOD_DB, ...INDIAN_FOOD_DB])
