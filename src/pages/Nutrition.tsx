@@ -3,6 +3,8 @@ import { useStore } from '../lib/store'
 import { Card, Ring, Bar, Modal, Empty, PageHeader, Accordion } from '../components/ui'
 import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget, fatTarget, waterToday, tdee } from '../lib/calcs'
 import { today, uid, FOOD_DB, FoodItem } from '../lib/seed'
+import { FOOD_GROUPS } from '../lib/foodDb'
+import { parseMealOffline } from '../lib/foodNlp'
 import { searchFoods, lookupBarcode, FoodResult } from '../lib/foodApi'
 import { parseNutrition, ParsedNutrition, ninjaConfigured } from '../lib/apiNinjas'
 import { exportNutrition } from '../lib/shareExport'
@@ -509,9 +511,10 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
   const customFoods = useStore((s) => s.data.customFoods)
   const addCustomFood = useStore((s) => s.addCustomFood)
   const delCustomFood = useStore((s) => s.delCustomFood)
-  const smartAvailable = foodSource === 'auto' || foodSource === 'ninja'
+  // Smart works offline now (local NLP over the food database), so it's always available.
+  const smartAvailable = true
   const [source, setSource] = useState<Source>(
-    foodSource === 'static' ? 'quick' : foodSource === 'off' ? 'online' : (smartAvailable && ninjaConfigured ? 'smart' : 'quick'),
+    foodSource === 'static' ? 'quick' : foodSource === 'off' ? 'online' : 'smart',
   )
 
   // smart (NLP) mode
@@ -550,6 +553,7 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
 
   // online search
   const [q, setQ] = useState('')
+  const [qcat, setQcat] = useState<string>(FOOD_GROUPS[0]?.category || 'All')
   const [online, setOnline] = useState<FoodResult[]>([])
   const [loading, setLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -575,8 +579,10 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
     return () => clearTimeout(tmr)
   }, [q, source])
 
-  const quick = q.trim() ? FOOD_DB.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : FOOD_DB.slice(0, 8)
-  const customMatches = q.trim() ? customFoods.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())) : customFoods.slice(0, 6)
+  const searchTerm = q.trim().toLowerCase()
+  const searchResults = searchTerm ? FOOD_DB.filter((f) => f.name.toLowerCase().includes(searchTerm)).slice(0, 50) : []
+  const catItems = qcat === 'All' ? FOOD_GROUPS.flatMap((g) => g.items) : (FOOD_GROUPS.find((g) => g.category === qcat)?.items || [])
+  const customMatches = searchTerm ? customFoods.filter((f) => f.name.toLowerCase().includes(searchTerm)) : customFoods.slice(0, 6)
 
   function saveAsCustom() {
     if (!name.trim() || !(+vals.calories)) { alert('Enter a name and calories first'); return }
@@ -597,12 +603,22 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
   async function doSmart() {
     if (!sq.trim()) return
     setSBusy(true); setSMsg(null); setParsed(null)
-    const r = await parseNutrition(sq.trim())
+    // 1) try the API (best accuracy) if configured; 2) fall back to the offline DB parser
+    let r: ParsedNutrition | null = ninjaConfigured ? await parseNutrition(sq.trim()) : null
+    let offline = false
+    if (!r || !r.items.length) {
+      const local = parseMealOffline(sq.trim())
+      if (local.items.length) { r = { items: local.items, total: local.total }; offline = true }
+    }
     setSBusy(false)
-    if (!r) { setSMsg('Could not read that — try simpler wording, or use another tab. (Needs the api-ninjas function deployed.)'); return }
+    if (!r || !r.items.length) {
+      setSMsg('Couldn’t recognise those foods — try simpler names like “2 idli, sambar, 1 banana”, or use the Browse / Manual tabs.')
+      return
+    }
     setParsed(r)
     setName(sq.trim())
     setVals({ calories: String(r.total.calories), protein: String(r.total.protein), carbs: String(r.total.carbs), fat: String(r.total.fat) })
+    if (offline) setSMsg('Matched offline from PULSE’s food database — review & save.')
   }
 
   async function doBarcode() {
@@ -683,7 +699,7 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
                 <div className="text-[11px] text-muted2 mt-1.5">Loaded into the fields below — adjust and save.</div>
               </div>
             )}
-            <div className="text-[11px] text-muted2 mt-2">Powered by API Ninjas NLP, via your secure Supabase function.</div>
+            <div className="text-[11px] text-muted2 mt-2">{ninjaConfigured ? 'Uses API Ninjas NLP when available, with an offline fallback over PULSE’s Indian food database.' : 'Works fully offline — matched against PULSE’s 260+ Indian/Tamil Nadu/Bangladeshi/hotel food database.'}</div>
           </div>
         )}
 
@@ -701,27 +717,45 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
           <>
             <div className="relative mb-2">
               <Search size={15} className="absolute left-3 top-3 text-muted" />
-              <input className="input pl-9" placeholder="My foods + Indian (Tamil Nadu & North)…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input className="input pl-9" placeholder="Search 260+ foods, or browse by category…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <div className="flex flex-col gap-1.5 mb-3 max-h-[220px] overflow-y-auto">
-              {customMatches.map((f) => (
-                <div key={'c' + f.name} className="flex justify-between items-center p-2.5 rounded-lg text-sm"
-                  style={{ background: 'rgba(139,92,255,.08)', border: '1px solid rgba(139,92,255,.25)' }}>
-                  <button className="flex-1 text-left" onClick={() => fillLocal(f)}>
-                    <b>★ {f.name}</b><span className="text-muted text-xs block">{f.serving} · my food</span></button>
-                  <span className="text-cyan font-bold mr-2">{f.calories} kcal</span>
-                  <button className="text-muted hover:text-red" onClick={() => delCustomFood(f.name)}><Trash2 size={13} /></button>
+
+            {/* my custom foods */}
+            {customMatches.length > 0 && (
+              <div className="flex flex-col gap-1.5 mb-2">
+                {customMatches.map((f) => (
+                  <div key={'c' + f.name} className="flex justify-between items-center p-2.5 rounded-lg text-sm"
+                    style={{ background: 'rgba(139,92,255,.08)', border: '1px solid rgba(139,92,255,.25)' }}>
+                    <button className="flex-1 text-left" onClick={() => fillLocal(f)}>
+                      <b>★ {f.name}</b><span className="text-muted text-xs block">{f.serving} · my food</span></button>
+                    <span className="text-cyan font-bold mr-2">{f.calories} kcal</span>
+                    <button className="text-muted hover:text-red" onClick={() => delCustomFood(f.name)}><Trash2 size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {searchTerm ? (
+              <div className="flex flex-col gap-1.5 mb-3 max-h-[300px] overflow-y-auto">
+                {searchResults.length === 0 && <div className="text-muted2 text-sm px-1 py-3">No matches — try the Manual tab or save a custom food.</div>}
+                {searchResults.map((f) => <QuickFoodRow key={f.name} f={f} onPick={() => fillLocal(f)} />)}
+              </div>
+            ) : (
+              <>
+                {/* category chips — tap to browse a cuisine section */}
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {[{ category: 'All', icon: '🍽️' }, ...FOOD_GROUPS].map((g) => (
+                    <span key={g.category} className={`chip ${qcat === g.category ? 'chip-on' : ''}`} onClick={() => setQcat(g.category)} style={{ fontSize: 11, padding: '4px 9px' }}>
+                      {g.icon} {g.category.replace(' · ', ' ')}
+                    </span>
+                  ))}
                 </div>
-              ))}
-              {quick.map((f) => (
-                <button key={f.name} onClick={() => fillLocal(f)}
-                  className="flex justify-between items-center p-2.5 rounded-lg text-left text-sm hover:bg-[rgba(120,160,255,.08)]"
-                  style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
-                  <span><b>{f.name}</b><span className="text-muted text-xs block">{f.serving}</span></span>
-                  <span className="text-cyan font-bold">{f.calories} kcal</span>
-                </button>
-              ))}
-            </div>
+                <div className="text-[11px] text-muted2 mb-1.5 px-0.5">{catItems.length} foods{qcat !== 'All' ? ` in ${qcat}` : ''} — tap to add</div>
+                <div className="flex flex-col gap-1.5 mb-3 max-h-[300px] overflow-y-auto pr-0.5">
+                  {catItems.map((f) => <QuickFoodRow key={f.name} f={f} onPick={() => fillLocal(f)} />)}
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -781,6 +815,17 @@ function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (m: Omit<
         }}>Save Meal</button>
       </div>
     </Modal>
+  )
+}
+
+function QuickFoodRow({ f, onPick }: { f: FoodItem; onPick: () => void }) {
+  return (
+    <button onClick={onPick}
+      className="flex justify-between items-center p-2.5 rounded-lg text-left text-sm hover:bg-[rgba(120,160,255,.08)]"
+      style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
+      <span className="min-w-0"><b className="block truncate">{f.name}</b><span className="text-muted text-xs block">{f.serving} · P{f.protein} C{f.carbs} F{f.fat}</span></span>
+      <span className="text-cyan font-bold shrink-0 ml-2">{f.calories}<span className="text-muted text-[10px] font-semibold"> kcal</span></span>
+    </button>
   )
 }
 
