@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, ReactNode } from 'react'
 import { useStore } from '../lib/store'
-import { Card, Modal, PageHeader, Empty } from '../components/ui'
-import { workoutsThisWeek, streak, totalLost } from '../lib/calcs'
+import { Card, Modal, PageHeader, Empty, Toggle } from '../components/ui'
+import { workoutsThisWeek, streak, totalLost, latestWeight, bmi, bmiLabel, calorieTarget, proteinTarget, carbTarget, fatTarget, caloriesOn, macrosOn, waterToday, prs, totalVolume } from '../lib/calcs'
+import { dayReport } from '../lib/nutrition'
+import { getProgram } from '../lib/programs'
+import { today } from '../lib/seed'
 import { ACHIEVEMENTS } from '../lib/achievements'
-import { Friend } from '../lib/types'
+import { Friend, AppData, SHARE_PAGES, SharePage } from '../lib/types'
 import { isAdmin, fetchLeaderboard, upsertEntry, deleteEntry, LbEntry, ADMIN_EMAIL } from '../lib/leaderboard'
-import { myGroups, groupMembers, createGroup, joinByCode, publishStats, leaveGroup, inviteLink, Group, GroupMember, MemberStats } from '../lib/groups'
-import { Trash2, Pencil, ShieldCheck, Globe, Plus, Users2, Copy, LogOut, UserPlus } from 'lucide-react'
+import { myGroups, groupMembers, createGroup, joinByCode, publishStats, leaveGroup, inviteLink, fetchMemberData, currentUserId, Group, GroupMember, MemberStats } from '../lib/groups'
+import { Trash2, Pencil, ShieldCheck, Globe, Plus, Users2, Copy, LogOut, UserPlus, Eye, Lock, Loader2 } from 'lucide-react'
 
 interface Row { me?: boolean; name: string; color: string; weeklyWorkouts: number; streak: number; weightLost: number; caloriesAvg: number }
 
@@ -143,8 +146,23 @@ function GroupsSection() {
   const [createOpen, setCreateOpen] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [busy, setBusy] = useState(false)
+  const [myId, setMyId] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<{ name: string; data: AppData } | null>(null)
+  const [viewBusy, setViewBusy] = useState<string | null>(null)
+
+  async function openMember(mem: GroupMember) {
+    setViewBusy(mem.user_id)
+    const data = await fetchMemberData(mem.user_id)
+    setViewBusy(null)
+    if (!data || !data.sharing?.enabled || !SHARE_PAGES.some((p) => data.sharing.pages?.[p.key])) {
+      showToast(`${mem.name || 'This member'} hasn't shared any pages yet`)
+      return
+    }
+    setViewing({ name: mem.name || 'Teammate', data })
+  }
 
   async function load() {
+    setMyId(await currentUserId())
     const gs = await myGroups()
     setGroups(gs)
     if (gs.length) await publishStats(gs.map((g) => g.id), me)
@@ -187,6 +205,8 @@ function GroupsSection() {
         <button className="btn btn-sm btn-primary ml-auto" onClick={() => setCreateOpen(true)}><Plus size={13} /> Create group</button>
       </div>
 
+      <SharingPanel />
+
       <Card className="mb-4">
         <label className="label">Join a group with an invite code</label>
         <div className="flex gap-2">
@@ -215,6 +235,11 @@ function GroupsSection() {
                   <div className="flex-1 min-w-0"><b className="text-[14px]">{mem.name}</b>
                     <span className="block text-[11px] text-muted">{mem.weekly_workouts}/wk · 🔥 {mem.streak}</span></div>
                   <div className="font-extrabold text-right text-green shrink-0" style={{ color: '#2bffb0' }}>{mem.weight_lost}<span className="block text-[10px] text-muted font-semibold">kg lost</span></div>
+                  {mem.user_id !== myId && (
+                    <button className="btn btn-sm shrink-0" title="View shared pages" disabled={viewBusy === mem.user_id} onClick={() => openMember(mem)}>
+                      {viewBusy === mem.user_id ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -222,7 +247,175 @@ function GroupsSection() {
         ))}
 
       {createOpen && <CreateGroupModal me={me} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); void load() }} />}
+      {viewing && <MemberViewer name={viewing.name} data={viewing.data} onClose={() => setViewing(null)} />}
     </div>
+  )
+}
+
+/* ---------------- Privacy & sharing controls ---------------- */
+function SharingPanel() {
+  const sharing = useStore((s) => s.data.sharing)
+  const setSharing = useStore((s) => s.setSharing)
+  const showToast = useStore((s) => s.showToast)
+  const anyOn = sharing.enabled && SHARE_PAGES.some((p) => sharing.pages[p.key])
+
+  function toggleMaster(v: boolean) {
+    setSharing({ ...sharing, enabled: v })
+    showToast(v ? 'Sharing on — choose what teammates can see' : 'Sharing off — your data is private 🔒')
+  }
+  const togglePage = (k: SharePage, v: boolean) => setSharing({ ...sharing, pages: { ...sharing.pages, [k]: v } })
+
+  return (
+    <Card className="mb-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          {sharing.enabled ? <Eye size={16} className="text-cyan" /> : <Lock size={16} className="text-muted" />}
+          <div className="h3">Privacy &amp; Sharing</div>
+          <span className="tag" style={{ background: sharing.enabled ? 'rgba(34,227,255,.14)' : 'rgba(120,160,255,.12)', color: sharing.enabled ? '#22e3ff' : '#7d89a8' }}>{sharing.enabled ? 'On' : 'Private'}</span>
+        </div>
+        <Toggle on={sharing.enabled} onChange={toggleMaster} />
+      </div>
+      <p className="text-muted text-[12.5px] mt-1.5">Pick what your group teammates can view. Everything is private by default — turn a page on to let teammates open a <b className="text-txt">read-only</b> view of it. Turn the master switch off anytime to instantly hide everything.</p>
+
+      <div className={`mt-3 grid gap-2 transition-opacity ${sharing.enabled ? '' : 'opacity-45 pointer-events-none'}`} style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))' }}>
+        {SHARE_PAGES.map((p) => (
+          <div key={p.key} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: sharing.pages[p.key] ? 'rgba(34,227,255,.07)' : 'rgba(6,8,15,.4)', border: `1px solid ${sharing.pages[p.key] ? 'rgba(34,227,255,.28)' : 'rgba(120,160,255,.12)'}` }}>
+            <span className="text-xl shrink-0">{p.icon}</span>
+            <div className="flex-1 min-w-0"><b className="text-[13.5px]">{p.label}</b><div className="text-[11px] text-muted leading-tight mt-0.5">{p.desc}</div></div>
+            <Toggle on={!!sharing.pages[p.key]} onChange={(v) => togglePage(p.key, v)} disabled={!sharing.enabled} />
+          </div>
+        ))}
+      </div>
+
+      {sharing.enabled && !anyOn && <div className="text-[11.5px] text-amber mt-2.5">⚠️ Sharing is on but no pages are selected — teammates still can't see anything. Toggle a page above.</div>}
+      <div className="text-[11px] text-muted2 mt-2.5">Only members of groups you belong to can view, and only the pages you enable. Requires cloud sync.</div>
+    </Card>
+  )
+}
+
+/* ---------------- Read-only teammate viewer ---------------- */
+function VStat({ label, value, unit, color = '#e8edff' }: { label: string; value: string | number; unit?: string; color?: string }) {
+  return (
+    <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
+      <div className="text-[18px] font-extrabold leading-none" style={{ color }}>{value}{unit ? <span className="text-[10px] text-muted font-semibold ml-0.5">{unit}</span> : null}</div>
+      <div className="text-[10px] text-muted uppercase tracking-wide mt-1">{label}</div>
+    </div>
+  )
+}
+function VSection({ icon, title, children }: { icon: string; title: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="h3 mb-2 flex items-center gap-1.5"><span>{icon}</span>{title}</div>
+      {children}
+    </div>
+  )
+}
+
+function MemberViewer({ name, data, onClose }: { name: string; data: AppData; onClose: () => void }) {
+  // normalise arrays so calc helpers are safe on any saved shape
+  const d: AppData = {
+    ...data,
+    weights: data.weights || [], workouts: data.workouts || [], meals: data.meals || [],
+    water: data.water || [], inbody: data.inbody || [], measurements: data.measurements || [],
+  }
+  const pages = d.sharing?.pages || { dashboard: false, workouts: false, nutrition: false, body: false }
+  const shown = SHARE_PAGES.filter((p) => pages[p.key])
+  const t = today()
+  const w = latestWeight(d)
+  const b = bmi(d)
+  const [bLabel, bColor] = bmiLabel(b)
+  const grid3 = { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 } as const
+
+  const todayMeals = d.meals.filter((m) => m.date === t)
+  const rep = pages.nutrition ? dayReport(
+    todayMeals.map((m) => ({ name: m.name, calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat })),
+    { calories: calorieTarget(d), protein: proteinTarget(d), carbs: carbTarget(d), fat: fatTarget(d) }, d.profile.sex,
+  ) : null
+  const mac = macrosOn(d, t)
+  const prCount = Object.keys(prs(d)).length
+  const recentWorkouts = [...d.workouts].sort((a, c) => c.date.localeCompare(a.date)).slice(0, 6)
+  const lastInbody = d.inbody[d.inbody.length - 1]
+  const lastMeas = d.measurements[d.measurements.length - 1]
+  const program = getProgram(d.profile.programId)
+
+  return (
+    <Modal wide title={`${name}'s PULSE`} onClose={onClose}>
+      <div className="flex items-center gap-2 mt-1 mb-3 flex-wrap">
+        <span className="tag bg-[rgba(43,255,176,.16)] text-green inline-flex items-center gap-1"><Eye size={11} /> Read-only</span>
+        <span className="text-[12px] text-muted">Shared by {name} · {shown.length} page{shown.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {shown.length === 0 ? (
+        <Empty icon="🔒" title="Nothing shared" sub={`${name} hasn't enabled any pages`} />
+      ) : (
+        <div className="flex flex-col gap-5">
+          {pages.dashboard && (
+            <VSection icon="📊" title="Dashboard">
+              <div style={grid3}>
+                <VStat label="Weight" value={w.toFixed(1)} unit="kg" color="#22e3ff" />
+                <VStat label="BMI" value={b.toFixed(1)} color={bColor} />
+                <VStat label="Streak" value={streak(d)} unit="d" color="#ffcf5c" />
+                <VStat label="This week" value={workoutsThisWeek(d)} unit="wk" color="#8b5cff" />
+                <VStat label="Lost" value={Math.max(0, totalLost(d))} unit="kg" color="#2bffb0" />
+                <VStat label="Today kcal" value={caloriesOn(d, t)} color="#ff4fd8" />
+              </div>
+              <div className="text-[11px] mt-1.5" style={{ color: bColor }}>BMI status: {bLabel}</div>
+            </VSection>
+          )}
+
+          {pages.workouts && (
+            <VSection icon="🏋️" title="Workouts">
+              <div style={grid3}>
+                <VStat label="Total" value={d.workouts.length} color="#22e3ff" />
+                <VStat label="This week" value={workoutsThisWeek(d)} color="#8b5cff" />
+                <VStat label="Streak" value={streak(d)} unit="d" color="#ffcf5c" />
+                <VStat label="PRs" value={prCount} color="#2bffb0" />
+                <VStat label="Volume" value={totalVolume(d).toLocaleString()} unit="kg" color="#ff4fd8" />
+              </div>
+              {recentWorkouts.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {recentWorkouts.map((wo) => (
+                    <div key={wo.id} className="flex justify-between items-center text-[12.5px] px-3 py-2 rounded-lg" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.1)' }}>
+                      <b className="truncate">{wo.name}</b><span className="text-muted shrink-0 ml-2">{wo.type} · {wo.date}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </VSection>
+          )}
+
+          {pages.nutrition && rep && (
+            <VSection icon="🥗" title="Nutrition (today)">
+              <div style={grid3}>
+                <VStat label="Calories" value={caloriesOn(d, t)} unit={`/${calorieTarget(d)}`} color="#2bffb0" />
+                <VStat label="Health" value={rep.score} unit="/100" color="#ff4fd8" />
+                <VStat label="Water" value={(waterToday(d) / 1000).toFixed(1)} unit="L" color="#22e3ff" />
+                <VStat label="Protein" value={Math.round(mac.p)} unit="g" color="#22e3ff" />
+                <VStat label="Carbs" value={Math.round(mac.c)} unit="g" color="#8b5cff" />
+                <VStat label="Fat" value={Math.round(mac.f)} unit="g" color="#ff4fd8" />
+              </div>
+              <div className="text-[11.5px] text-muted mt-1.5">{rep.summary}</div>
+            </VSection>
+          )}
+
+          {pages.body && (
+            <VSection icon="🧬" title="Body & Programs">
+              <div style={grid3}>
+                <VStat label="Weight" value={w.toFixed(1)} unit="kg" color="#22e3ff" />
+                <VStat label="BMI" value={b.toFixed(1)} color={bColor} />
+                <VStat label="Target" value={d.profile.targetWeight || '—'} unit="kg" color="#2bffb0" />
+                {lastInbody?.bodyFatPct != null && <VStat label="Body fat" value={lastInbody.bodyFatPct} unit="%" color="#ffcf5c" />}
+                {lastInbody?.skeletalMuscleMass != null && <VStat label="Muscle" value={lastInbody.skeletalMuscleMass} unit="kg" color="#8b5cff" />}
+                {lastMeas?.waist != null && <VStat label="Waist" value={lastMeas.waist} unit="cm" color="#ff4fd8" />}
+              </div>
+              <div className="mt-2 text-[12.5px] px-3 py-2 rounded-lg" style={{ background: 'rgba(139,92,255,.08)', border: '1px solid rgba(139,92,255,.2)' }}>
+                Active program: <b className="text-txt">{program ? `${program.emoji} ${program.name}` : 'None set'}</b>
+              </div>
+            </VSection>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 

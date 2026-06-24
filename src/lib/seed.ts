@@ -69,6 +69,8 @@ export function emptyAccount(): AppData {
     customFoods: [],
     menus: {},
     settings: { accent: 'aurora', weightUnit: 'kg', exerciseSource: 'auto', foodSource: 'auto', waterTargetMl: 3000 },
+    // Private by default — nothing is shared with teammates until you opt in.
+    sharing: { enabled: false, pages: { dashboard: false, workouts: false, nutrition: false, body: false } },
   }
 }
 

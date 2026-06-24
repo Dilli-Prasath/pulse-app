@@ -71,23 +71,39 @@ export function Bar({ label, value, target, color }: { label: string; value: num
   )
 }
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    // lock background scroll while the modal is open
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = prev }
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 sm:p-12 overflow-y-auto"
+    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-3 sm:p-8"
       style={{ background: 'rgba(3,5,12,.72)', backdropFilter: 'blur(7px)' }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-[520px] rounded-[20px] p-7 relative animate-pop"
-        style={{ background: '#121826', border: '1px solid rgba(120,160,255,.22)', boxShadow: '0 30px 80px rgba(0,0,0,.6)' }}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-muted hover:text-white"><X size={22} /></button>
-        <h2 className="text-xl font-bold mb-1">{title}</h2>
-        {children}
+      {/* viewport-bounded: header stays put, body scrolls — so footer buttons are always reachable on small screens */}
+      <div className={`w-full ${wide ? 'max-w-[760px]' : 'max-w-[520px]'} rounded-[20px] relative animate-pop flex flex-col`}
+        style={{ background: '#121826', border: '1px solid rgba(120,160,255,.22)', boxShadow: '0 30px 80px rgba(0,0,0,.6)', maxHeight: 'min(92dvh, 92vh)' }}>
+        <button onClick={onClose} className="absolute top-3.5 right-3.5 z-10 text-muted hover:text-white"><X size={22} /></button>
+        <h2 className="text-xl font-bold px-6 pt-6 pr-12 shrink-0">{title}</h2>
+        <div className="px-6 pb-6 pt-1 overflow-y-auto overscroll-contain">{children}</div>
       </div>
     </div>
+  )
+}
+
+/** Pill on/off switch used for settings & sharing toggles. */
+export function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={disabled}
+      onClick={() => !disabled && onChange(!on)}
+      className="relative rounded-full transition-all shrink-0"
+      style={{ width: 44, height: 25, background: on ? 'linear-gradient(90deg,#22e3ff,#8b5cff)' : 'rgba(120,160,255,.2)', opacity: disabled ? 0.45 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+      <span className="absolute top-[3px] rounded-full bg-white transition-all" style={{ width: 19, height: 19, left: on ? 22 : 3, boxShadow: '0 1px 4px rgba(0,0,0,.4)' }} />
+    </button>
   )
 }
 

@@ -30,6 +30,32 @@ drop policy if exists "own row delete" on public.pulse_state;
 create policy "own row delete" on public.pulse_state
   for delete using (auth.uid() = user_id);
 
+-- ------------------------------------------------------------
+--  Teammate data sharing.
+--  A group teammate may READ another member's pulse_state row, but ONLY when
+--  that member has turned sharing on (data->sharing->enabled = true). Which
+--  individual pages are visible is then filtered client-side from
+--  data->sharing->pages. This policy is additive (OR) to "own row select".
+-- ------------------------------------------------------------
+-- True when the signed-in user and `other` are both members of some common group.
+create or replace function public.shares_group(other uuid)
+  returns boolean language sql security definer stable as $$
+  select exists (
+    select 1
+    from public.group_members a
+    join public.group_members b on a.group_id = b.group_id
+    where a.user_id = auth.uid() and b.user_id = other
+  );
+$$;
+grant execute on function public.shares_group(uuid) to authenticated;
+
+drop policy if exists "shared row select" on public.pulse_state;
+create policy "shared row select" on public.pulse_state
+  for select using (
+    coalesce((data -> 'sharing' ->> 'enabled')::boolean, false) = true
+    and public.shares_group(user_id)
+  );
+
 
 -- ============================================================
 --  Global, admin-curated leaderboard.

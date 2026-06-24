@@ -376,7 +376,7 @@ function CanteenMenuCard() {
 
       {suggest && (
         <Modal title="🎯 Best picks for your goal" onClose={() => setSuggest(null)}>
-          <div className="mt-2 max-h-[68vh] overflow-y-auto pr-1">
+          <div className="mt-2">
             <div className="text-muted text-[13px] mb-3">From today's canteen menu, optimised for your target of <b className="text-txt">{calTgt} kcal</b> and <b className="text-txt">{protTgt}g protein</b> — nutrition-first (balanced, protein-rich, low fried/sugar), without overshooting.</div>
             <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl" style={{ background: BAND_COLOR[suggest.totals.band] + '14', border: `1px solid ${BAND_COLOR[suggest.totals.band]}44` }}>
               <span className="grid place-items-center rounded-lg font-black text-[13px] shrink-0" style={{ width: 28, height: 28, background: BAND_COLOR[suggest.totals.band], color: '#06080f' }}>{suggest.totals.score}</span>
@@ -473,7 +473,7 @@ function DietPlansCard() {
 
       {preview && (
         <Modal title={preview.name} onClose={() => setPreview(null)}>
-          <div className="mt-2 max-h-[68vh] overflow-y-auto pr-1">
+          <div className="mt-2">
             <div className="text-muted text-sm mb-3">{preview.blurb}</div>
             {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map((mt) => {
               const its = preview.items.filter((x) => x.meal === mt)

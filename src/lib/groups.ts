@@ -2,7 +2,8 @@
  * Groups / teams. Members can read their groups and each member's published
  * stats. Enforced by Supabase RLS (see supabase/schema.sql).
  */
-import { supabase } from './supabase'
+import { supabase, TABLE } from './supabase'
+import { AppData } from './types'
 
 export interface Group { id: string; name: string; owner_id: string; invite_code: string; created_at?: string }
 export interface GroupMember {
@@ -67,4 +68,22 @@ export async function leaveGroup(groupId: string): Promise<void> {
 
 export function inviteLink(code: string): string {
   return `${window.location.origin}/friends?join=${code}`
+}
+
+/** The signed-in user's id (used to hide "View" on your own row). */
+export async function currentUserId(): Promise<string | null> {
+  if (!supabase) return null
+  return (await supabase.auth.getUser()).data.user?.id ?? null
+}
+
+/**
+ * Fetch a teammate's full app data — succeeds only if they enabled sharing and
+ * share a group with you (enforced by Supabase RLS). Returns null otherwise.
+ * Page-level visibility is then read from data.sharing.pages by the viewer.
+ */
+export async function fetchMemberData(userId: string): Promise<AppData | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.from(TABLE).select('data').eq('user_id', userId).maybeSingle()
+  if (error || !data?.data) return null
+  return data.data as AppData
 }

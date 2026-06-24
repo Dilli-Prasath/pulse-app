@@ -113,6 +113,20 @@ export interface Settings {
   waterTargetMl: number
 }
 
+/** Pages a user can choose to share with their group teammates. */
+export type SharePage = 'dashboard' | 'workouts' | 'nutrition' | 'body'
+/** Privacy & sharing: master switch + per-page visibility for teammates. */
+export interface SharingConfig {
+  enabled: boolean
+  pages: Record<SharePage, boolean>
+}
+export const SHARE_PAGES: { key: SharePage; label: string; icon: string; desc: string }[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: '📊', desc: 'Weight, BMI, streak, workouts & calories overview' },
+  { key: 'workouts', label: 'Workouts', icon: '🏋️', desc: 'Workout history, weekly count, PRs & volume' },
+  { key: 'nutrition', label: 'Nutrition', icon: '🥗', desc: 'Calories, macros, water & nutrition score' },
+  { key: 'body', label: 'Body & Programs', icon: '🧬', desc: 'Weight, BMI, InBody, measurements & active goal' },
+]
+
 export interface AppData {
   profile: Profile
   weights: WeightEntry[]
@@ -127,4 +141,6 @@ export interface AppData {
   /** office/canteen menus keyed by date (YYYY-MM-DD) */
   menus: Record<string, MenuItem[]>
   settings: Settings
+  /** privacy: what (if anything) group teammates may view. */
+  sharing: SharingConfig
 }

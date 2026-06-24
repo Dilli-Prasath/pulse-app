@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry, CustomFood, MenuItem } from './types'
+import { AppData, Profile, Workout, Meal, WeightEntry, Friend, Routine, InBodyEntry, Settings, MeasurementEntry, CustomFood, MenuItem, SharingConfig } from './types'
 import { emptyAccount, uid } from './seed'
 import { supabase, cloudConfigured, TABLE } from './supabase'
 import type { Session } from '@supabase/supabase-js'
@@ -33,6 +33,10 @@ function migrate(d: Partial<AppData>): AppData {
     customFoods: d.customFoods ?? [],
     menus: d.menus ?? {},
     settings: { ...base.settings, ...(d.settings || {}) },
+    sharing: {
+      enabled: d.sharing?.enabled ?? base.sharing.enabled,
+      pages: { ...base.sharing.pages, ...(d.sharing?.pages || {}) },
+    },
   }
 }
 function saveLocal(d: AppData) {
@@ -74,6 +78,7 @@ interface StoreState {
   delFriend: (id: string) => void
   saveProfile: (p: Partial<Profile>) => void
   updateSettings: (s: Partial<Settings>) => void
+  setSharing: (s: SharingConfig) => void
   completeOnboarding: (p: Partial<Profile>) => void
   addRoutine: (r: Omit<Routine, 'id'>) => void
   delRoutine: (id: string) => void
@@ -207,6 +212,7 @@ export const useStore = create<StoreState>((set, get) => ({
   delFriend: (id) => get().update((d) => { d.friends = d.friends.filter((x) => x.id !== id) }),
   saveProfile: (p) => get().update((d) => { d.profile = { ...d.profile, ...p } }),
   updateSettings: (s) => get().update((d) => { d.settings = { ...d.settings, ...s } }),
+  setSharing: (s) => get().update((d) => { d.sharing = s }),
   completeOnboarding: (p) => get().update((d) => {
     d.profile = { ...d.profile, ...p, onboarded: true }
     if (p.startWeight && !d.weights.length) d.weights.push({ date: new Date().toISOString().slice(0, 10), kg: p.startWeight })
