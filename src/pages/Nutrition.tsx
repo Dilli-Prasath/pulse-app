@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
-import { Card, Ring, Bar, Modal, Empty, PageHeader, Accordion } from '../components/ui'
+import { Card, Ring, Bar, Modal, PageHeader, Accordion } from '../components/ui'
 import { caloriesOn, calorieTarget, macrosOn, mealsOn, proteinTarget, carbTarget, fatTarget, waterToday, tdee, bmi, latestWeight } from '../lib/calcs'
 import { today, uid, FOOD_DB, FoodItem } from '../lib/seed'
 import { FOOD_GROUPS } from '../lib/foodDb'
@@ -13,6 +13,7 @@ import { buildDay, DietPref } from '../lib/dietBuilder'
 import { DIET_PLANS, planTotals, DietPlan, bestDietFor } from '../lib/dietPlans'
 import { getProgram, suggestProgram, programCalories } from '../lib/programs'
 import { DietPicks, useApplyDiet } from '../components/DietPicks'
+import { PlanEditor, PlanRow, rowFromMenu, rowFromFood, useLogRows, markLogged, FoodSearch, QtyStepper } from '../components/PlanEditor'
 import { parseCanteenMenu, MEAL_LABEL, suggestFromMenu, MenuSuggestion, itemQty, fmtQty } from '../lib/canteen'
 import { menuForToday } from '../lib/canteenData'
 import { estimateMacros } from '../lib/macros'
@@ -41,6 +42,9 @@ export default function Nutrition() {
   const d = useStore((s) => s.data)
   const addMeal = useStore((s) => s.addMeal)
   const delMeal = useStore((s) => s.delMeal)
+  const setMealQty = useStore((s) => s.setMealQty)
+  const logRows = useLogRows()
+  const [addTo, setAddTo] = useState<MealType | null>(null)
   const showToast = useStore((s) => s.showToast)
   const [open, setOpen] = useState(false)
   const t = today()
@@ -124,41 +128,51 @@ export default function Nutrition() {
             </div>
           )}
         </div>
-        {meals.length ? (
-          <div className="flex flex-col gap-4">
-            {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map((mt) => {
-              const group = meals.filter((x) => x.mealType === mt)
-              if (!group.length) return null
-              const sub = group.reduce((s, x) => s + (x.calories || 0), 0)
-              return (
-                <Accordion key={mt}
-                  title={<div className="text-[12px] font-bold text-muted flex items-center gap-1.5">
-                    <span className="text-base">{MEAL_ICON[mt]}</span>{mt[0].toUpperCase() + mt.slice(1)}
-                    <span className="text-muted2 font-normal">· {group.length} item{group.length > 1 ? 's' : ''}</span></div>}
-                  right={<span className="text-[12px] font-bold text-cyan">{sub} kcal</span>}>
+        <div className="flex flex-col gap-4">
+          {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map((mt) => {
+            const group = meals.filter((x) => x.mealType === mt)
+            const sub = group.reduce((s, x) => s + (x.calories || 0), 0)
+            return (
+              <Accordion key={mt}
+                title={<div className="text-[12px] font-bold text-muted flex items-center gap-1.5">
+                  <span className="text-base">{MEAL_ICON[mt]}</span>{mt[0].toUpperCase() + mt.slice(1)}
+                  <span className="text-muted2 font-normal">· {group.length ? `${group.length} item${group.length > 1 ? 's' : ''}` : 'nothing yet'}</span></div>}
+                right={<span className="text-[12px] font-bold text-cyan">{sub} kcal</span>}>
+                {group.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(120,160,255,.12)' }}>
-                    {group.map((meal, idx) => (
-                      <div key={meal.id} className="flex items-center gap-3 px-3 py-2.5"
-                        style={{ background: 'rgba(6,8,15,.35)', borderTop: idx ? '1px solid rgba(120,160,255,.08)' : 'none' }}>
-                        <div className="flex-1 min-w-0">
-                          <b className="text-[14px] block truncate">{meal.name}</b>
-                          <span className="text-[11px] text-muted">P{meal.protein} · C{meal.carbs} · F{meal.fat}</span>
+                    {group.map((meal, idx) => {
+                      const q = meal.qty || 1
+                      return (
+                        <div key={meal.id} className="flex items-center gap-2 px-3 py-2.5 flex-wrap"
+                          style={{ background: 'rgba(6,8,15,.35)', borderTop: idx ? '1px solid rgba(120,160,255,.08)' : 'none' }}>
+                          <div className="flex-1 min-w-[140px]">
+                            <b className="text-[14px] block truncate">{meal.name}</b>
+                            <span className="text-[11px] text-muted"><b className="text-txt">{meal.calories} kcal</b> · P{Math.round(meal.protein)} · C{Math.round(meal.carbs)} · F{Math.round(meal.fat)}</span>
+                          </div>
+                          <HealthPill h={analyzeFood(meal.name, meal.calories, { protein: meal.protein, carbs: meal.carbs, fat: meal.fat })} />
+                          {/* portion = multiple of what was logged: ½×, 1×, 1½×, 2× … */}
+                          <div className="ml-auto"><QtyStepper value={q} label={`${q}×`}
+                            onMinus={() => q > 0.5 ? setMealQty(meal.id, q - 0.5) : delMeal(meal.id)}
+                            onPlus={() => setMealQty(meal.id, q + 0.5)}
+                            onRemove={() => { delMeal(meal.id); showToast(`Removed ${meal.name}`) }} /></div>
                         </div>
-                        <HealthPill h={analyzeFood(meal.name, meal.calories, { protein: meal.protein, carbs: meal.carbs, fat: meal.fat })} />
-                        <div className="font-extrabold text-right shrink-0 tabular-nums">{meal.calories}<span className="text-[10px] text-muted font-semibold ml-0.5">kcal</span></div>
-                        <button className="text-muted hover:text-red shrink-0 p-1" onClick={() => delMeal(meal.id)}><Trash2 size={15} /></button>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
-                </Accordion>
-              )
-            })}
+                )}
+                {addTo === mt
+                  ? <FoodSearch meal={mt} onClose={() => setAddTo(null)} onPick={(r) => { logRows([r]); showToast(`Added ${r.name} (${r.label(r.servings)}) ✅`); setAddTo(null) }} />
+                  : <button className="text-[12px] font-bold text-cyan mt-2 flex items-center gap-1" onClick={() => setAddTo(mt)}><Plus size={13} /> Add food to {mt}</button>}
+              </Accordion>
+            )
+          })}
+          {meals.length > 0 && (
             <div className="flex items-center justify-between pt-1 px-1 border-t border-line">
               <span className="text-sm font-bold">Day total</span>
               <span className="text-base font-extrabold text-green">{cals} kcal · <span className="text-muted text-sm">P{Math.round(m.p)} C{Math.round(m.c)} F{Math.round(m.f)}</span></span>
             </div>
-          </div>
-        ) : <Empty icon="🍽️" title="Nothing logged today" sub="Tap “Log Meal” to add food" />}
+          )}
+        </div>
       </Card>
 
       {open && <MealModal onClose={() => setOpen(false)} onSave={(meal) => { addMeal(meal); showToast('Meal logged 🍽️'); setOpen(false) }} />}
@@ -313,6 +327,18 @@ function CanteenMenuCard() {
   const [importOpen, setImportOpen] = useState(false)
   const [text, setText] = useState('')
   const [suggest, setSuggest] = useState<MenuSuggestion | null>(null)
+  const [rows, setRows] = useState<PlanRow[]>([])
+  const logRows = useLogRows()
+  function openSuggest() {
+    const s = suggestFromMenu(todayMenu, calTgt, protTgt)
+    setSuggest(s)
+    // per-serving macros from the suggestion, so −/+ rescales exactly
+    setRows(markLogged(s.picks.map((p) => ({
+      ...rowFromMenu(p.item, p.servings, { calories: p.item.calories, protein: p.protein / p.servings, carbs: p.carbs / p.servings, fat: p.fat / p.servings }),
+      tag: <><span className="grid place-items-center rounded-full font-black text-[9px] shrink-0" style={{ width: 14, height: 14, background: BAND_COLOR[p.band], color: '#06080f' }}>{p.score}</span>
+        <span className="text-[10.5px] capitalize" style={{ color: '#8b5cff' }}>{p.role === 'accompaniment' ? 'side' : p.role}</span></>,
+    })), d.meals, t))
+  }
 
   const calTgt = calorieTarget(d)
   const protTgt = proteinTarget(d)
@@ -323,11 +349,11 @@ function CanteenMenuCard() {
       calories: Math.round(it.calories * qty), protein: m.protein * qty, carbs: m.carbs * qty, fat: m.fat * qty })
     showToast(`Logged ${it.name} ✅`)
   }
-  function logAllPicks() {
-    if (!suggest) return
-    suggest.picks.forEach((p) => addMeal({ date: t, mealType: p.item.meal, name: `${p.item.name} (${p.qtyLabel})`,
-      calories: p.calories, protein: p.protein, carbs: p.carbs, fat: p.fat }))
-    showToast(`Logged ${suggest.picks.length} recommended items 🎯`); setSuggest(null)
+  function logPicks(rs: PlanRow[], allDone: boolean) {
+    logRows(rs, t)
+    const meals = [...new Set(rs.map((r) => MEAL_LABEL[r.meal].slice(2).trim()))].join(' + ')
+    showToast(`Logged ${meals} — ${rs.length} item${rs.length > 1 ? 's' : ''} ✅`)
+    if (allDone) setSuggest(null) // keep the popup open while other meals are still to log
   }
 
   function doImport() {
@@ -345,7 +371,7 @@ function CanteenMenuCard() {
       <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <div className="h3 flex items-center gap-2"><Building2 size={15} className="text-cyan" /> Canteen Menu · Today{officeLabel ? ` · ${officeLabel}` : ''}</div>
         <div className="flex gap-2 flex-wrap">
-          {todayMenu.length > 0 && <button className="btn btn-sm" onClick={() => setSuggest(suggestFromMenu(todayMenu, calTgt, protTgt))}><Sparkles size={13} /> Suggest for my goal</button>}
+          {todayMenu.length > 0 && <button className="btn btn-sm" onClick={openSuggest}><Sparkles size={13} /> Suggest for my goal</button>}
           {todayMenu.length > 0 && <button className="btn btn-sm btn-danger" onClick={() => clearMenu(t)}>Clear</button>}
           <button className="btn btn-sm btn-primary" onClick={() => setImportOpen(true)}><Plus size={13} /> {todayMenu.length ? 'Re-import' : 'Paste menu'}</button>
         </div>
@@ -387,29 +413,10 @@ function CanteenMenuCard() {
             <div className="text-muted text-[13px] mb-3">From today's canteen menu, optimised for your target of <b className="text-txt">{calTgt} kcal</b> and <b className="text-txt">{protTgt}g protein</b> — nutrition-first (balanced, protein-rich, low fried/sugar), without overshooting.</div>
             <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl" style={{ background: BAND_COLOR[suggest.totals.band] + '14', border: `1px solid ${BAND_COLOR[suggest.totals.band]}44` }}>
               <span className="grid place-items-center rounded-lg font-black text-[13px] shrink-0" style={{ width: 28, height: 28, background: BAND_COLOR[suggest.totals.band], color: '#06080f' }}>{suggest.totals.score}</span>
-              <span className="text-[12.5px]"><b style={{ color: BAND_COLOR[suggest.totals.band] }}>Plate health {suggest.totals.score}/100</b> — these picks favour dals, veg, steamed & lean items over fried and sweet.</span>
+              <span className="text-[12.5px]"><b style={{ color: BAND_COLOR[suggest.totals.band] }}>Suggested plate health {suggest.totals.score}/100</b> — these picks favour dals, veg, steamed & lean items over fried and sweet.</span>
             </div>
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {[['Calories', suggest.totals.calories], ['Protein', suggest.totals.protein + 'g'], ['Carbs', suggest.totals.carbs + 'g'], ['Fat', suggest.totals.fat + 'g']].map(([l, v]) => (
-                <div key={l as string} className="rounded-xl p-2.5 text-center" style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
-                  <div className="text-[17px] font-extrabold">{v}</div><div className="text-[10px] text-muted uppercase tracking-wide">{l}</div></div>
-              ))}
-            </div>
-            {suggest.picks.length === 0 ? <div className="text-muted text-sm">No suitable items found in today's menu.</div> : (
-              <div className="flex flex-col gap-1.5">
-                {suggest.picks.map((p, i) => (<div key={i}>
-                  {(i === 0 || suggest.picks[i - 1].item.meal !== p.item.meal) && <div className="h3 mt-2 mb-1">{MEAL_LABEL[p.item.meal]} · {suggest.picks.filter((x) => x.item.meal === p.item.meal).reduce((a, x) => a + x.calories, 0)} kcal</div>}
-                  <div className="flex justify-between items-center gap-2 p-2.5 rounded-lg text-sm" style={{ background: 'rgba(43,255,176,.06)', border: '1px solid rgba(43,255,176,.2)' }}>
-                    <span className="min-w-0"><span className="flex items-center gap-1.5 flex-wrap"><b>{p.item.name}</b><span className="grid place-items-center rounded-full font-black text-[9px] shrink-0" style={{ width: 14, height: 14, background: BAND_COLOR[p.band], color: '#06080f' }}>{p.score}</span></span>
-                      <span className="text-muted text-xs block"><span className="capitalize" style={{ color: '#8b5cff' }}>{p.role === 'accompaniment' ? 'side' : p.role}</span></span>
-                      <span className="inline-flex items-center gap-1.5 mt-1 text-[12px]"><b className="px-2 py-0.5 rounded-md" style={{ background: 'rgba(34,227,255,.14)', color: '#22e3ff' }}>Take {p.qtyLabel}</b>
-                        {p.servings !== 1 && <span className="text-muted2 text-[11px]">{fmtQty(itemQty(p.item))} = {p.item.calories} kcal</span>}</span></span>
-                    <span className="text-right shrink-0"><b className="text-green">{p.calories} kcal</b><span className="text-muted text-[11px] block">P{p.protein} C{p.carbs} F{p.fat}</span></span>
-                  </div>
-                </div>))}
-              </div>
-            )}
-            {suggest.picks.length > 0 && <button className="btn btn-primary w-full mt-3" onClick={logAllPicks}><Check size={15} /> Log all picks to today</button>}
+            <div className="text-[11.5px] text-muted2 mb-2">Didn't eat something? Tap <b className="text-txt">✕</b> or <b className="text-txt">−</b>. Had extra? Use <b className="text-txt">+</b> or <b className="text-txt">Add food</b>.</div>
+            <PlanEditor rows={rows} onChange={setRows} onLog={logPicks} logLabel="Log these to today" />
           </div>
         </Modal>
       )}
@@ -440,8 +447,8 @@ const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner']
 /** A full day built from the food library (separate from the canteen menu) with exact quantities. */
 function BestDietCard() {
   const d = useStore((s) => s.data)
-  const addMeal = useStore((s) => s.addMeal)
   const showToast = useStore((s) => s.showToast)
+  const logRows = useLogRows()
   const [pref, setPrefState] = useState<DietPref>(() => {
     try { const v = localStorage.getItem(PREF_KEY); if (v === 'veg' || v === 'egg' || v === 'nonveg') return v } catch { /* storage blocked */ }
     return 'veg'
@@ -449,17 +456,20 @@ function BestDietCard() {
   const [seed, setSeed] = useState(() => new Date().getDate())
   const calTgt = calorieTarget(d)
   const protTgt = proteinTarget(d)
-  const day = buildDay({ calTarget: calTgt, pref, seed })
-  const t = today()
+  const [rows, setRows] = useState<PlanRow[]>([])
+  // rebuild the plate whenever the preference, shuffle or target changes (edits reset)
+  useEffect(() => {
+    setRows(markLogged(buildDay({ calTarget: calTgt, pref, seed }).items.map((i) => rowFromFood(i.food, i.meal, i.servings)), useStore.getState().data.meals))
+  }, [calTgt, pref, seed])
 
   function setPref(p: DietPref) {
     setPrefState(p)
     try { localStorage.setItem(PREF_KEY, p) } catch { /* storage blocked */ }
   }
-  function logAll() {
-    day.items.forEach((i) => addMeal({ date: t, mealType: i.meal, name: `${i.food.name} (${i.qtyLabel})`,
-      calories: i.calories, protein: i.protein, carbs: i.carbs, fat: i.fat }))
-    showToast(`Logged ${day.items.length} items from your diet plan 🎯`)
+  function logAll(rs: PlanRow[]) {
+    logRows(rs)
+    const meals = [...new Set(rs.map((r) => MEAL_LABEL[r.meal].slice(2).trim()))].join(' + ')
+    showToast(`Logged ${meals} from your diet plan ✅`)
   }
 
   return (
@@ -472,38 +482,9 @@ function BestDietCard() {
           ))}
         </div>
       </div>
-      <div className="text-muted text-xs mb-3">A full day picked from {FOOD_DB.length}+ foods for your <b className="text-txt">{calTgt} kcal</b> / <b className="text-txt">{protTgt} g protein</b> target — healthiest options first, with exactly how much to eat.</div>
-
-      <div className="grid grid-cols-4 gap-2 mb-3">
-        {[['Calories', day.totals.calories, ''], ['Protein', day.totals.protein, 'g'], ['Carbs', day.totals.carbs, 'g'], ['Fat', day.totals.fat, 'g']].map(([l, v, u]) => (
-          <div key={l as string} className="rounded-xl p-2 text-center" style={{ background: 'rgba(6,8,15,.5)', border: '1px solid rgba(120,160,255,.12)' }}>
-            <div className="text-[16px] font-extrabold">{v}<span className="text-[10px] text-muted">{u}</span></div><div className="text-[10px] text-muted uppercase tracking-wide">{l}</div></div>
-        ))}
-      </div>
-
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
-        {MEAL_ORDER.map((mt) => {
-          const its = day.items.filter((i) => i.meal === mt)
-          if (!its.length) return null
-          return (
-            <div key={mt} className="p-3 rounded-xl" style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
-              <div className="flex justify-between items-center mb-1.5"><b className="text-[12px] text-muted">{MEAL_LABEL[mt]}</b>
-                <span className="text-[11px] text-muted2">{its.reduce((a, i) => a + i.calories, 0)} kcal</span></div>
-              {its.map((i) => (
-                <div key={i.food.name} className="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
-                  <span className="min-w-0"><b className="text-[13px] block leading-tight">{i.food.name}</b>
-                    <span className="text-[11.5px] font-bold" style={{ color: '#22e3ff' }}>Take {i.qtyLabel}</span></span>
-                  <span className="text-right shrink-0"><b className="text-green text-[12.5px]">{i.calories} kcal</b><span className="text-muted text-[10.5px] block">P{i.protein} C{i.carbs} F{i.fat}</span></span>
-                </div>
-              ))}
-            </div>
-          )
-        })}
-      </div>
-      <div className="flex gap-2 mt-3">
-        <button className="btn flex-1 justify-center" onClick={() => setSeed((s) => s + 1)}>🔀 Shuffle</button>
-        <button className="btn btn-primary flex-1 justify-center" onClick={logAll}><Check size={15} /> Log all to today</button>
-      </div>
+      <div className="text-muted text-xs mb-3">A full day picked from {FOOD_DB.length}+ foods for your <b className="text-txt">{calTgt} kcal</b> / <b className="text-txt">{protTgt} g protein</b> target — with exactly how much to eat. Change amounts, remove or add anything before logging.</div>
+      <PlanEditor rows={rows} onChange={setRows} onLog={logAll} />
+      <button className="btn w-full justify-center mt-2" onClick={() => setSeed((s) => s + 1)}>🔀 Shuffle a new day</button>
     </Card>
   )
 }

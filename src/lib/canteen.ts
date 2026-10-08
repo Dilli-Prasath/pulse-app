@@ -142,7 +142,7 @@ export function foodRole(name: string): Role {
   if (/egg|omelette|omlet|paneer|chicken|fish|mutton|prawn/.test(n)) return 'protein'
   if (/\bdal\b|dall|sambar|sambhar|rajma|chana|channa|\bgram\b|peas|moong|toor|kootu/.test(n)) return 'protein'
   if (/sagu|kurma|korma/.test(n)) return 'veg' // gravy side served with poori/chapathi
-  if (/idli|dosa|kaldosa|poori|puri|chapathi|chapati|roti|naan|rice|pongal|upma|koozh|kanji|kanchi|porridge|biryani|paratha|uttapam|bread|fermented/.test(n)) return 'base'
+  if (/idli|dosa|kaldosa|poori|puri|chapathi|chapati|roti|naan|rice|pongal|upma|koozh|kanji|kanchi|porridge|biryani|paratha|uttapam|bread|fermented|macaroni|macroni|pasta|noodles/.test(n)) return 'base'
   if (/poriyal|masala|aloo|potato|beetroot|cabbage|cauliflower|sabzi|sabji|\bveg\b/.test(n)) return 'veg'
   if (/banana|guava|muskmelon|melon|apple|orange|fruit|grape|papaya|pomegranate|pineapple|sapota|chikoo|pear\b/.test(n)) return 'fruit'
   if (/vada|suzhiyam|boondhi|bajji|bonda|pakoda/.test(n)) return 'fried'

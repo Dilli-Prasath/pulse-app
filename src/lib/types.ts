@@ -55,6 +55,10 @@ export interface Meal {
   protein: number
   carbs: number
   fat: number
+  /** portion multiplier vs. what was first logged (default 1) */
+  qty?: number
+  /** values at qty 1 — set the first time the portion is changed, so rescaling never drifts */
+  base?: { calories: number; protein: number; carbs: number; fat: number }
 }
 
 export interface WeightEntry { date: string; kg: number }

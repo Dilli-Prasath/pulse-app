@@ -5,7 +5,7 @@ import { MenuItem } from './types'
  * Each weekday can have its own menu. menuForToday() returns the right one.
  *
  * Status: Tuesday and Thursday are the real menus you shared (Thursday
- * breakfast last refreshed 08-Oct-2026). The other
+ * breakfast & lunch last refreshed 08-Oct-2026). The other
  * weekdays currently fall back to Thursday's menu (marked "default") until you
  * share each day's — just paste them and I'll fill them in precisely. Sat & Sun
  * are limited placeholders.
@@ -40,27 +40,26 @@ const THURSDAY: MenuItem[] = [
   { meal: 'snack', name: 'Veg Cutlet', calories: 132, qty: '1 No' },
   { meal: 'snack', name: 'Sweet Chutney', calories: 149, qty: '100 Gms' },
   { meal: 'snack', name: 'Mint Chutney', calories: 149, qty: '100 Gms' },
-  // Zoho Lunch (12.00–03.00 PM)
-  { meal: 'lunch', name: 'Keerai Sadam', calories: 148, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Channa Kurma', calories: 160, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Poori', calories: 107, qty: '1 No' },
+  // Zoho Lunch (12.00–03.00 PM) — updated 08-Oct-2026
+  { meal: 'lunch', name: 'Pudalangai Poriyal', calories: 70, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Karuppu Kavuni Rice Pongal', calories: 160, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Fried Gram Chutney', calories: 217, qty: '100 Gms' },
   { meal: 'lunch', name: 'Curd Rice', calories: 60, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Banana', calories: 90, qty: '1 No' },
+  { meal: 'lunch', name: 'Coconut Rice', calories: 210, qty: '100 Gms' },
   { meal: 'lunch', name: 'Boiled Egg', calories: 78, qty: '1 No' },
-  { meal: 'lunch', name: 'Paruppu Thuvaiyal', calories: 97, qty: '100 Gms' },
   { meal: 'lunch', name: 'Green Chilly Ginger Buttermilk', calories: 80, qty: '200 Gms' },
-  // Annalakshmi Lunch (12.00–03.00 PM)
-  { meal: 'lunch', name: 'Chapathi', calories: 70, qty: '1 No' },
-  { meal: 'lunch', name: 'Paneer Butter Masala', calories: 131, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Hyderabad Biryani', calories: 141, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Onion Raitha', calories: 67, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Kiran', calories: 30, qty: '100 Gms' },
+  // Annalakshmi Lunch (12.00–03.00 PM) — updated 08-Oct-2026
+  { meal: 'lunch', name: 'Vendhaya Dosai', calories: 72, qty: '1 No' },
+  { meal: 'lunch', name: 'Vada Curry', calories: 217, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Schezwan Veg Macroni', calories: 128, qty: '100 Gms' },
   { meal: 'lunch', name: 'Plain Rice', calories: 113, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Drumstick Mango Sambar', calories: 75, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Mangalore Rasam', calories: 26, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Kovakkai Onion Curry', calories: 64, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Cabbage Kootu', calories: 89, qty: '100 Gms' },
-  { meal: 'lunch', name: 'Sago Payasam', calories: 202, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Ladies Finger Sambar', calories: 114, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Garlic Rasam', calories: 50, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Kothavarangai Poriyal', calories: 66, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Peerkangai Chow Chow Kootu', calories: 85, qty: '100 Gms' },
   { meal: 'lunch', name: 'Appalam', calories: 99, qty: '1 No' },
+  { meal: 'lunch', name: 'Banana', calories: 90, qty: '1 No' },
   // Dinner (07.00–10.30 PM)
   { meal: 'dinner', name: 'White Rice', calories: 113, qty: '100 Gms' },
   { meal: 'dinner', name: 'Idli', calories: 60, qty: '1 No' },

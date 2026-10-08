@@ -111,10 +111,16 @@ function rng(seed: number) {
   return () => { t += 0x6d2b79f5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296 }
 }
 
+/** Smallest sensible change for a serving: one piece for countable items, else half a serving. */
+export function servingStep(serving: string): number {
+  const p = parseServing(serving)
+  return p?.countable ? 1 / p.n : 0.5
+}
+
 function rules(role: Role, serving: string): { start: number; step: number; max: number } {
   const p = parseServing(serving)!
   // countable items step by one whole piece ("2 pcs" idli → ½ serving = 1 pc, "1 large" egg → 1 egg); others by half a serving
-  const step = p.countable ? 1 / p.n : 0.5
+  const step = servingStep(serving)
   const start = !p.countable && role === 'accompaniment' ? 0.5 : 1
   if (role === 'accompaniment') return { start, step, max: 1 }
   if (role === 'base') return { start, step, max: 2.5 }

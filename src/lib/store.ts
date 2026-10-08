@@ -73,6 +73,8 @@ interface StoreState {
   addMeal: (m: Omit<Meal, 'id'>) => void
   setDayMeals: (date: string, meals: Omit<Meal, 'id'>[]) => void
   delMeal: (id: string) => void
+  /** change a logged meal's portion (multiplier of the original amount) */
+  setMealQty: (id: string, qty: number) => void
   logWeight: (e: WeightEntry) => void
   addFriend: (f: Omit<Friend, 'id'>) => void
   delFriend: (id: string) => void
@@ -202,6 +204,14 @@ export const useStore = create<StoreState>((set, get) => ({
     meals.forEach((m) => d.meals.push({ ...m, id: uid() }))
   }),
   delMeal: (id) => get().update((d) => { d.meals = d.meals.filter((x) => x.id !== id) }),
+  setMealQty: (id, qty) => get().update((d) => {
+    const m = d.meals.find((x) => x.id === id)
+    if (!m || qty <= 0) return
+    const q0 = m.qty || 1
+    const base = m.base || { calories: m.calories / q0, protein: m.protein / q0, carbs: m.carbs / q0, fat: m.fat / q0 }
+    const r1 = (v: number) => Math.round(v * 10) / 10
+    Object.assign(m, { qty, base, calories: Math.round(base.calories * qty), protein: r1(base.protein * qty), carbs: r1(base.carbs * qty), fat: r1(base.fat * qty) })
+  }),
   logWeight: (e) => get().update((d) => {
     const ex = d.weights.find((w) => w.date === e.date)
     if (ex) ex.kg = e.kg
