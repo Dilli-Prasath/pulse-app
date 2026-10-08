@@ -53,7 +53,7 @@ export default function Recipes() {
 
       {detail && (
         <Modal title={detail.title} onClose={() => setDetail(null)}>
-          <div className="mt-2 max-h-[72vh] overflow-y-auto pr-1">
+          <div className="mt-2">
             {detail.image && <img src={detail.image} alt={detail.title} className="w-full h-48 object-cover rounded-xl mb-3" />}
             <div className="text-muted text-xs mb-3">{[detail.category, detail.area].filter(Boolean).join(' · ')}</div>
             <div className="h3 mb-2">Ingredients</div>

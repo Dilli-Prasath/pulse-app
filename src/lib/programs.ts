@@ -137,6 +137,29 @@ export const PROGRAMS: Program[] = [
     color: '#ff4fd8',
   },
 
+  /* ---------------- Running / endurance ---------------- */
+  {
+    id: 'run_endurance', name: 'Run & Endurance (5K → 10K)', emoji: '🏃', gender: 'all', level: 'Beginner',
+    tagline: 'Jog to a strong 5K, then 10K',
+    description: 'Three runs a week — easy jogs, one interval session and a weekend long run — plus a lower-body strength day to protect knees and hips. Carb-forward fuelling so runs feel good, a small deficit so you get lighter and faster.',
+    kcalDelta: -200, proteinPerKg: 1.6, macros: { protein: 25, carbs: 50, fat: 25 },
+    split: [
+      { day: 'Mon', focus: 'Easy jog 25 min' }, { day: 'Tue', focus: 'Lower body + core strength' },
+      { day: 'Wed', focus: 'Interval run (sprints) 20 min' }, { day: 'Thu', focus: 'Rest / brisk walk' },
+      { day: 'Fri', focus: 'Tempo run 25 min' }, { day: 'Sat', focus: 'Long run 40 min' }, { day: 'Sun', focus: 'Rest' },
+    ],
+    keyExercises: ['Walking Lunge', 'Bodyweight Squat', 'Glute Bridge', 'Standing Calf Raise', 'Plank'],
+    foods: {
+      protein: ['Eggs', 'Dal / sambar', 'Curd', 'Chicken / fish', 'Paneer', 'Sundal'],
+      carbs: ['Idli / dosa', 'Rice', 'Oats', 'Banana', 'Sweet potato', 'Poha'],
+      fats: ['Groundnuts', 'Almonds', 'Coconut chutney (small)'],
+      veg: ['Spinach / keerai', 'Beetroot (nitrates)', 'Mixed poriyal'],
+      snacks: ['Banana before runs', 'Buttermilk + salt after', 'Dates', 'Chikki'],
+    },
+    results: 'Most beginners jog 5K non-stop in 6–8 weeks and 10K by ~12 weeks. Resting heart rate and stamina improve within 3–4 weeks.',
+    color: '#ff9f43',
+  },
+
   /* ---------------- Recomp / strength / general ---------------- */
   {
     id: 'recomp', name: 'Body Recomposition', emoji: '🔄', gender: 'all', level: 'Intermediate',
@@ -201,6 +224,11 @@ export const PROGRAMS: Program[] = [
     color: '#2bffb0',
   },
 ]
+
+/** A program's own daily calorie target from maintenance (TDEE). */
+export function programCalories(p: Program, tdee: number): number {
+  return Math.max(1200, Math.round(tdee + p.kcalDelta))
+}
 
 export function getProgram(id?: string): Program | undefined {
   return PROGRAMS.find((p) => p.id === id)

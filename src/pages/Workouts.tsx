@@ -8,8 +8,10 @@ import { ExerciseDetail } from '../components/ExerciseDetail'
 import { Combobox } from '../components/Combobox'
 import { GuidedSession } from '../components/GuidedSession'
 import { ExercisePicker } from '../components/ExercisePicker'
+import { ActivitiesCard, ActivityLogModal } from '../components/Activities'
+import { ACTIVITIES, ACTIVITY_BY_ID, Activity, activityCalories, activitiesForProgram } from '../lib/activities'
 import { EXERCISE_LIBRARY, EXERCISE_BY_NAME, exerciseDef } from '../lib/exerciseLibrary'
-import { todaySession } from '../lib/session'
+import { todaySession, sessionSummary } from '../lib/session'
 import { totalVolume, prs, workoutsThisWeek, streak, fmtDate, latestWeight } from '../lib/calcs'
 import { today, uid } from '../lib/seed'
 import { caloriesBurned, ninjaConfigured } from '../lib/apiNinjas'
@@ -19,7 +21,8 @@ import { Trash2, Loader2, Flame, Play, Sparkles, Dumbbell } from 'lucide-react'
 interface ExRow { id: string; name: string; setsReps: string; weight: string }
 
 const EXERCISE_NAMES = [...new Set(EXERCISE_LIBRARY.map((e) => e.name))].sort()
-const NAME_SUGGESTIONS = ['Push Day', 'Pull Day', 'Leg Day', 'Upper Body', 'Lower Body', 'Full Body', 'Chest & Triceps', 'Back & Biceps', 'Shoulders & Arms', 'Core & Abs', 'Morning Run', 'Cardio', 'HIIT']
+const ACTIVITY_NAMES = ACTIVITIES.map((a) => a.name)
+const NAME_SUGGESTIONS = ['Push Day', 'Pull Day', 'Leg Day', 'Upper Body', 'Lower Body', 'Full Body', 'Chest & Triceps', 'Back & Biceps', 'Shoulders & Arms', 'Core & Abs', 'Morning Run', 'Evening Jog', 'Long Run', 'Cardio', 'HIIT']
 const PREVIEW_SIZES = [{ key: 'S', px: 72 }, { key: 'M', px: 120 }, { key: 'L', px: 180 }, { key: 'XL', px: 260 }, { key: 'XXL', px: 360 }]
 
 export default function Workouts() {
@@ -32,6 +35,11 @@ export default function Workouts() {
   const [open, setOpen] = useState(params.get('add') === '1')
   const [guided, setGuided] = useState(false)
   const [detail, setDetail] = useState<string | null>(null)
+  // quick-log an activity; ?activity=jog&min=25 (from Dashboard/Programs) opens it pre-filled
+  const [logAct, setLogAct] = useState<{ activity: Activity; minutes?: number } | null>(() => {
+    const a = ACTIVITY_BY_ID[params.get('activity') || '']
+    return a ? { activity: a, minutes: +(params.get('min') || 0) || undefined } : null
+  })
   const [preview, setPreview] = useState(() => localStorage.getItem('pulse_workout_preview') || 'M')
   const pSize = PREVIEW_SIZES.find((s) => s.key === preview)?.px || 120
   const nav = useNavigate()
@@ -43,6 +51,8 @@ export default function Workouts() {
   const prKeys = Object.keys(pr)
 
   function close() { setOpen(false); params.delete('add'); setParams(params, { replace: true }) }
+  function closeActivity() { setLogAct(null); params.delete('activity'); params.delete('min'); setParams(params, { replace: true }) }
+  const kg = latestWeight(d) || 70
 
   return (
     <>
@@ -62,12 +72,28 @@ export default function Workouts() {
         <Card className="mb-4"><div className="h3 mb-1">📆 Today · {sess.weekday}</div>
           <div className="text-[15px] font-bold mt-1">😴 Rest day — {sess.program.name}</div>
           <div className="text-muted text-sm mt-1">Recover well. You can still log a custom workout above.</div></Card>
+      ) : sess.mode === 'activity' && sess.activity ? (
+        <Card className="mb-4 card-glow">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div><div className="h3">📆 Today · {sess.weekday}</div>
+              <div className="text-[16px] font-extrabold mt-1">{sess.program.emoji} {sess.focus}</div>
+              <div className="text-muted text-xs">{sess.program.name} · {sessionSummary(sess)} · ~{activityCalories(sess.activity.activity, sess.activity.minutes, kg)} kcal</div></div>
+            <button className="btn btn-primary" onClick={() => setLogAct(sess.activity!)}><Play size={15} /> Log it</button>
+          </div>
+          <div className="text-[12.5px] text-muted px-3 py-2 rounded-xl mb-3" style={{ background: 'rgba(34,227,255,.06)', border: '1px solid rgba(34,227,255,.18)' }}>💡 {sess.activity.activity.tip}</div>
+          <div className="text-[11px] text-muted uppercase tracking-wide font-bold mb-1.5">Or swap for</div>
+          <div className="flex gap-1.5 flex-wrap">
+            {activitiesForProgram(sess.program.id).filter((a) => a.id !== sess.activity!.activity.id).slice(0, 5).map((a) => (
+              <span key={a.id} className="chip" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setLogAct({ activity: a, minutes: sess.activity!.minutes })}>{a.emoji} {a.name}</span>
+            ))}
+          </div>
+        </Card>
       ) : (
         <Card className="mb-4 card-glow">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div><div className="h3">📆 Today · {sess.weekday}</div>
               <div className="text-[16px] font-extrabold mt-1">{sess.program.emoji} {sess.focus}</div>
-              <div className="text-muted text-xs">{sess.program.name} · {sess.mode === 'circuit' ? `${sess.items.length}-move circuit` : `${sess.items.length} exercises`} · ~{sess.estMin} min</div></div>
+              <div className="text-muted text-xs">{sess.program.name} · {sessionSummary(sess)}</div></div>
             <button className="btn btn-primary" onClick={() => setGuided(true)}><Play size={15} /> Start guided</button>
           </div>
 
@@ -101,6 +127,8 @@ export default function Workouts() {
         <Stat label="Personal Records" value={prKeys.length} color="#ff4fd8" />
       </div>
 
+      <ActivitiesCard onPick={(a) => setLogAct({ activity: a })} />
+
       <Card className="mt-4"><div className="h3 mb-3">🏆 Personal Records</div>
         {prKeys.length ? (
           <div className="flex flex-col gap-2.5">
@@ -131,7 +159,7 @@ export default function Workouts() {
                   style={{ background: 'rgba(6,8,15,.4)', border: '1px solid rgba(120,160,255,.12)' }}>
                   {w.type === 'strength' && w.exercises?.[0]
                     ? <ExerciseImage name={w.exercises[0].name} size={44} />
-                    : <div className="w-11 h-11 rounded-xl grid place-items-center text-lg" style={{ background: 'rgba(120,160,255,.08)' }}>🏃</div>}
+                    : <div className="w-11 h-11 rounded-xl grid place-items-center text-lg" style={{ background: 'rgba(120,160,255,.08)' }}>{ACTIVITIES.find((a) => a.name === w.name)?.emoji || '🏃'}</div>}
                   <div className="flex-1 min-w-0">
                     <b className="text-[14.5px]">{w.name} <Tag color={w.type === 'cardio' ? 'cardio' : 'str'}>{w.type}</Tag></b>
                     <span className="block text-xs text-muted">{fmtDate(w.date)} · {detail}</span>
@@ -148,7 +176,9 @@ export default function Workouts() {
 
       {detail && <ExerciseDetail name={detail} onClose={() => setDetail(null)} />}
 
-      {guided && sess && !sess.rest && (
+      {logAct && <ActivityLogModal key={logAct.activity.id} activity={logAct.activity} minutes={logAct.minutes} onClose={closeActivity} />}
+
+      {guided && sess && !sess.rest && sess.mode !== 'activity' && (
         <GuidedSession title={`${sess.program.name} — ${sess.focus}`} items={sess.items} mode={sess.mode}
           restSec={sess.restSec} estMin={sess.estMin}
           onClose={() => setGuided(false)}
@@ -183,6 +213,10 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
   const [estBusy, setEstBusy] = useState(false)
   const [estMsg, setEstMsg] = useState<string | null>(null)
   const weightKg = useStore((s) => latestWeight(s.data))
+  // known activity → offline MET estimate used when calories/distance are left blank
+  const known = ACTIVITIES.find((a) => a.name.toLowerCase() === activity.trim().toLowerCase())
+  const autoKcal = known && +cardio.duration ? activityCalories(known, +cardio.duration, weightKg || 70) : 0
+  const autoKm = known?.kmh && +cardio.duration ? Math.round(known.kmh * (+cardio.duration / 60) * 10) / 10 : 0
 
   async function estimate() {
     const act = (activity || name).trim()
@@ -208,8 +242,8 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
       if (!exercises.length) return alert('Add at least one exercise')
       onSave({ id: uid(), date, type, name: name.trim() || 'Workout', exercises })
     } else {
-      onSave({ id: uid(), date, type, name: name.trim() || 'Cardio',
-        cardio: { duration: +cardio.duration || 0, distance: +cardio.distance || 0, calories: +cardio.calories || 0 } })
+      onSave({ id: uid(), date, type, name: name.trim() || known?.name || activity.trim() || 'Cardio',
+        cardio: { duration: +cardio.duration || 0, distance: +cardio.distance || autoKm, calories: +cardio.calories || autoKcal } })
     }
   }
 
@@ -250,12 +284,13 @@ function WorkoutModal({ onClose, onSave }: { onClose: () => void; onSave: (w: an
         ) : (
           <>
             <div className="mb-3"><label className="label">Activity</label>
-              <input className="input" placeholder="e.g. running, cycling, swimming" value={activity} onChange={(e) => setActivity(e.target.value)} /></div>
+              <Combobox value={activity} options={ACTIVITY_NAMES} placeholder="e.g. Jogging, Brisk Walk, Badminton" onChange={setActivity} /></div>
             <div className="grid grid-cols-3 gap-3">
               <div><label className="label">Duration (min)</label><input className="input" type="number" value={cardio.duration} onChange={(e) => setCardio({ ...cardio, duration: e.target.value })} /></div>
-              <div><label className="label">Distance (km)</label><input className="input" type="number" value={cardio.distance} onChange={(e) => setCardio({ ...cardio, distance: e.target.value })} /></div>
-              <div><label className="label">Calories</label><input className="input" type="number" value={cardio.calories} onChange={(e) => setCardio({ ...cardio, calories: e.target.value })} /></div>
+              <div><label className="label">Distance (km)</label><input className="input" type="number" placeholder={autoKm ? String(autoKm) : ''} value={cardio.distance} onChange={(e) => setCardio({ ...cardio, distance: e.target.value })} /></div>
+              <div><label className="label">Calories</label><input className="input" type="number" placeholder={autoKcal ? String(autoKcal) : ''} value={cardio.calories} onChange={(e) => setCardio({ ...cardio, calories: e.target.value })} /></div>
             </div>
+            {autoKcal > 0 && !cardio.calories && <div className="text-[11px] text-muted2 mt-1.5 flex items-center gap-1"><Flame size={11} className="text-amber" /> Auto-estimate {autoKcal} kcal{autoKm ? ` · ${autoKm} km` : ''} ({known!.met} MET) — leave blank to use it.</div>}
             {ninjaConfigured && (
               <div className="mt-2.5">
                 <button className="btn btn-sm w-full justify-center" disabled={estBusy} onClick={estimate}>

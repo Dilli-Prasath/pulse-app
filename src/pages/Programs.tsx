@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { Card, PageHeader, Modal, Tag } from '../components/ui'
 import { ExerciseImage } from '../components/ExerciseImage'
-import { PROGRAMS, Program, Gender, suggestProgram, getProgram } from '../lib/programs'
+import { PROGRAMS, Program, Gender, suggestProgram, getProgram, programCalories } from '../lib/programs'
+import { DietPicks } from '../components/DietPicks'
 import { tdee, bmi, latestWeight } from '../lib/calcs'
 import { today } from '../lib/seed'
 import { Check, Sparkles, Play } from 'lucide-react'
+import { isActivityFocus, activityForFocus } from '../lib/activities'
 
 export default function Programs() {
   const d = useStore((s) => s.data)
@@ -26,6 +28,10 @@ export default function Programs() {
   function pick(p: Program) { saveProfile({ programId: p.id }); showToast(`${p.name} set as your goal 🎯`) }
   function startWorkout(p: Program) { startDay(p, p.split[0]?.focus || 'Day 1') }
   function startDay(p: Program, focus: string) {
+    if (isActivityFocus(focus)) {
+      const { activity, minutes } = activityForFocus(focus, p.id)
+      nav(`/workouts?activity=${activity.id}&min=${minutes}`); return
+    }
     logSession({ date: today(), type: 'strength', name: `${p.name} — ${focus}`,
       exercises: p.keyExercises.map((n) => ({ name: n, sets: Array.from({ length: 3 }, () => ({ reps: 10, weight: 0 })) })) })
     showToast(`Loaded "${focus}" — open Workouts to do it 💪`); nav('/workouts')
@@ -124,14 +130,14 @@ function ProgramRow({ p, active, onOpen, onPick }: { p: Program; active: boolean
 
 function ProgramDetail({ p, tdeeVal, bodyKg, active, onClose, onPick, onStart, onStartDay }:
   { p: Program; tdeeVal: number; bodyKg: number; active: boolean; onClose: () => void; onPick: () => void; onStart: () => void; onStartDay: (focus: string) => void }) {
-  const kcal = Math.max(1200, tdeeVal + p.kcalDelta)
+  const kcal = programCalories(p, tdeeVal)
   const protein = Math.round((bodyKg || 75) * p.proteinPerKg)
   const carbs = Math.round((kcal * p.macros.carbs / 100) / 4)
   const fat = Math.round((kcal * p.macros.fat / 100) / 9)
 
   return (
     <Modal title={`${p.emoji} ${p.name}`} onClose={onClose}>
-      <div className="mt-2 max-h-[70vh] overflow-y-auto pr-1">
+      <div className="mt-2">
         <p className="text-sm text-muted leading-relaxed mb-4">{p.description}</p>
 
         <div className="h3 mb-2">🎯 Daily Nutrition Target</div>
@@ -166,6 +172,9 @@ function ProgramDetail({ p, tdeeVal, bodyKg, active, onClose, onPick, onStart, o
             </div>
           ))}
         </div>
+
+        <div className="h3 mb-2">🍽️ Best Diet Plan for this Program</div>
+        <div className="mb-4"><DietPicks program={p} /></div>
 
         <div className="h3 mb-2">🥗 Recommended Foods</div>
         <div className="space-y-2 mb-4 text-sm">

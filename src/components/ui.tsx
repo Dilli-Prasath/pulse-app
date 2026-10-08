@@ -1,4 +1,5 @@
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, ChevronDown } from 'lucide-react'
 
 export function Card({ children, glow = true, className = '' }: { children: ReactNode; glow?: boolean; className?: string }) {
@@ -72,26 +73,33 @@ export function Bar({ label, value, target, color }: { label: string; value: num
 }
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  // keep the latest onClose without re-running the effect on every parent render
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current()
     window.addEventListener('keydown', h)
     // lock background scroll while the modal is open
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = prev }
-  }, [onClose])
-  return (
-    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-3 sm:p-8"
-      style={{ background: 'rgba(3,5,12,.72)', backdropFilter: 'blur(7px)' }}
+  }, [])
+  // Portal to <body>: modals are often opened from inside a .card, whose
+  // backdrop-filter + overflow:hidden would otherwise become the containing
+  // block for `position: fixed` — trapping/clipping the dialog inside the card.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-8"
+      style={{ background: 'rgba(3,5,12,.72)', backdropFilter: 'blur(7px)', WebkitBackdropFilter: 'blur(7px)' }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      {/* viewport-bounded: header stays put, body scrolls — so footer buttons are always reachable on small screens */}
-      <div className={`w-full ${wide ? 'max-w-[760px]' : 'max-w-[520px]'} rounded-[20px] relative animate-pop flex flex-col`}
+      {/* viewport-bounded: header stays put, body is the ONLY scroller (min-h-0 lets it shrink inside the flex column) */}
+      <div className={`w-full ${wide ? 'max-w-[760px]' : 'max-w-[520px]'} rounded-[20px] relative animate-pop flex flex-col overflow-hidden`}
         style={{ background: '#121826', border: '1px solid rgba(120,160,255,.22)', boxShadow: '0 30px 80px rgba(0,0,0,.6)', maxHeight: 'min(92dvh, 92vh)' }}>
-        <button onClick={onClose} className="absolute top-3.5 right-3.5 z-10 text-muted hover:text-white"><X size={22} /></button>
-        <h2 className="text-xl font-bold px-6 pt-6 pr-12 shrink-0">{title}</h2>
-        <div className="px-6 pb-6 pt-1 overflow-y-auto overscroll-contain">{children}</div>
+        <button onClick={onClose} aria-label="Close" className="absolute top-3.5 right-3.5 z-10 text-muted hover:text-white"><X size={22} /></button>
+        <h2 className="text-xl font-bold px-5 sm:px-6 pt-5 sm:pt-6 pr-12 shrink-0">{title}</h2>
+        <div className="flex-1 min-h-0 px-5 sm:px-6 pb-6 pt-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

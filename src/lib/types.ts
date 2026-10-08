@@ -89,7 +89,8 @@ export interface Achievement {
 
 export interface WaterEntry { date: string; ml: number }
 export interface CustomFood { name: string; serving: string; calories: number; protein: number; carbs: number; fat: number }
-export interface MenuItem { meal: MealType; name: string; calories: number }
+/** `calories` is per `qty` — the canteen's serving, e.g. "1 No" or "100 Gms". */
+export interface MenuItem { meal: MealType; name: string; calories: number; qty?: string }
 export interface MeasurementEntry {
   id: string
   date: string

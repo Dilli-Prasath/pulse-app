@@ -7,7 +7,7 @@ import {
   totalLost, goalProgress, macrosOn, proteinTarget, carbTarget, fatTarget, fmtDate, last7Days, tdee,
 } from '../lib/calcs'
 import { dispWeight, wLabel } from '../lib/units'
-import { todaySession } from '../lib/session'
+import { todaySession, sessionSummary } from '../lib/session'
 import { waterToday } from '../lib/calcs'
 import { Dumbbell, ChevronRight } from 'lucide-react'
 
@@ -50,9 +50,9 @@ export default function Dashboard() {
               <div className="w-11 h-11 rounded-xl bg-grad grid place-items-center shadow-glowViolet shrink-0"><Dumbbell size={20} /></div>
               <div><div className="h3">Today · {sess.weekday}</div>
                 <div className="text-[15px] font-extrabold mt-0.5">{sess.program.emoji} {sess.rest ? 'Rest day 😴' : sess.focus}</div>
-                {!sess.rest && <div className="text-muted text-xs">{sess.mode === 'circuit' ? `${sess.items.length}-move circuit` : `${sess.items.length} exercises`} · ~{sess.estMin} min</div>}</div>
+                {!sess.rest && <div className="text-muted text-xs">{sessionSummary(sess)}</div>}</div>
             </div>
-            {!sess.rest && <button className="btn btn-primary" onClick={() => nav('/workouts')}>Start workout <ChevronRight size={15} /></button>}
+            {!sess.rest && <button className="btn btn-primary" onClick={() => nav(sess.mode === 'activity' ? '/workouts?activity=' + sess.activity!.activity.id + '&min=' + sess.activity!.minutes : '/workouts')}>{sess.mode === 'activity' ? 'Log activity' : 'Start workout'} <ChevronRight size={15} /></button>}
           </div></Card>
         )
       })()}

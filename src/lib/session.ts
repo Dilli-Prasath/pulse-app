@@ -5,11 +5,13 @@
  * auto-build the plan so nothing has to be typed:
  *   - strength days  → exercises with sets/reps
  *   - cardio/HIIT     → a guided timed circuit (work seconds per move)
+ *   - run/walk/ride/sport days → a single loggable activity with a duration
  * Also estimates how long the session will take.
  */
 import { AppData } from './types'
 import { getProgram, Program } from './programs'
 import { EXERCISE_LIBRARY } from './exerciseLibrary'
+import { Activity, activityForFocus, isActivityFocus } from './activities'
 
 export interface SessionItem {
   name: string
@@ -21,7 +23,7 @@ export interface SessionItem {
   /** timed circuit (work interval) */
   seconds?: number
 }
-export type SessionMode = 'strength' | 'circuit'
+export type SessionMode = 'strength' | 'circuit' | 'activity'
 export interface TodaySession {
   program: Program
   weekday: string
@@ -32,6 +34,14 @@ export interface TodaySession {
   estMin: number
   /** rest between items, seconds (timer guidance) */
   restSec: number
+  /** activity days: what to do and for how long */
+  activity?: { activity: Activity; minutes: number }
+}
+
+/** One-line description of a session, e.g. "5-move circuit · ~5 min". */
+export function sessionSummary(s: TodaySession): string {
+  if (s.mode === 'activity' && s.activity) return `${s.activity.activity.emoji} ${s.activity.activity.name} · ${s.activity.minutes} min`
+  return `${s.mode === 'circuit' ? `${s.items.length}-move circuit` : `${s.items.length} exercises`} · ~${s.estMin} min`
 }
 
 const BIG_LIFTS = new Set(['Squat', 'Deadlift', 'Bench Press', 'Overhead Press', 'Front Squat', 'Power Clean', 'Romanian Deadlift'])
@@ -85,15 +95,18 @@ export function todaySession(d: AppData): TodaySession | null {
   const day = program.split[idx]
   const focus = day?.focus || 'Rest'
   const rest = /rest/i.test(focus)
+  const activity = !rest && isActivityFocus(focus) ? activityForFocus(focus, program.id) : undefined
   const cardio = isCardio(focus)
-  const mode: SessionMode = cardio ? 'circuit' : 'strength'
-  const items = rest ? [] : cardio ? HIIT_CIRCUIT : buildStrength(program, focus)
+  const mode: SessionMode = activity ? 'activity' : cardio ? 'circuit' : 'strength'
+  const items = rest || activity ? [] : cardio ? HIIT_CIRCUIT : buildStrength(program, focus)
   const restSec = cardio ? CIRCUIT_REST : STRENGTH_REST
 
   // estimate minutes
   let estMin = 0
   if (!rest) {
-    if (mode === 'circuit') {
+    if (activity) {
+      estMin = activity.minutes
+    } else if (mode === 'circuit') {
       const perItem = items.reduce((s, it) => s + (it.seconds || 40) + restSec, 0)
       estMin = Math.round((perItem) / 60)
     } else {
@@ -102,5 +115,5 @@ export function todaySession(d: AppData): TodaySession | null {
       estMin = Math.round(sec / 60)
     }
   }
-  return { program, weekday: new Date().toLocaleDateString('en-US', { weekday: 'long' }), focus, rest, mode, items, estMin, restSec }
+  return { program, weekday: new Date().toLocaleDateString('en-US', { weekday: 'long' }), focus, rest, mode, items, estMin, restSec, activity }
 }
