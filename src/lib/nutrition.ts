@@ -72,7 +72,7 @@ export function foodTags(name: string): FoodTags {
     refinedGrain: has(n, /maida|naan|parotta|porotta|white bread|\bbun\b|noodle|pasta|macaroni|macroni|schezwan|biryani|biriyani|pulao|fried rice|poori|puri/),
     leanProtein: has(n, /egg(?!less)|omelette|omlet|paneer|chicken|fish|prawn|mutton|tofu|soya|soy chunk|grilled|tandoori|boiled egg|egg white/),
     dairy: has(n, /curd|yogurt|yoghurt|buttermilk|\bmilk\b|lassi|chaas|raita/),
-    fermented: has(n, /idli|dosa|uttapam|appam|idiyappam|dhokla|kanji|fermented|adai|pesarattu/),
+    fermented: has(n, /idli|dosa|uttapam|appam|idiyappam|dhokla|(?<!nombu )kanji|fermented|adai|pesarattu/),
     steamed: has(n, /idli|idiyappam|steam|puttu|kozhukattai|modak|boiled|sundal/),
     grilled: has(n, /grilled|tandoori|roast|baked|tikka|steam/),
     raw: has(n, /salad|sprout|raw|fruit|cucumber|carrot stick|kosambari/),

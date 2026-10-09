@@ -4,7 +4,7 @@ import { MenuItem } from './types'
  * Built-in (static) office canteen menus, keyed by DAY OF WEEK (0=Sun … 6=Sat).
  * Each weekday can have its own menu. menuForToday() returns the right one.
  *
- * Status: Tuesday and Thursday are the real menus you shared (Thursday
+ * Status: Tuesday, Thursday and Friday are the real menus you shared (Thursday
  * breakfast & lunch last refreshed 08-Oct-2026). The other
  * weekdays currently fall back to Thursday's menu (marked "default") until you
  * share each day's — just paste them and I'll fill them in precisely. Sat & Sun
@@ -137,6 +137,58 @@ const TUESDAY: MenuItem[] = [
   { meal: 'dinner', name: 'Appalam', calories: 99, qty: '1 No' },
 ]
 
+// ---------- Friday (exact, 09-Oct-2026 — breakfast not shared yet, uses Thursday's) ----------
+const FRIDAY: MenuItem[] = [
+  // Breakfast — Thursday's until you share Friday's
+  ...THURSDAY.filter((i) => i.meal === 'breakfast'),
+  // Live snacks (04.00–06.00 PM)
+  { meal: 'snack', name: 'Pav Bhajji Masala', calories: 192, qty: '100 Gms' },
+  { meal: 'snack', name: 'Mochai Sundal', calories: 212, qty: '100 Gms' },
+  { meal: 'snack', name: 'Pav Bun', calories: 120, qty: '1 No' }, // menu listed no qty/calories — ~1 pav estimate
+  // Zoho Lunch (12.00–03.00 PM)
+  { meal: 'lunch', name: 'Karamani Poriyal', calories: 95, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Lemon Sevai', calories: 401, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Sambar Sadam', calories: 130, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Curd Rice', calories: 60, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Green Chilly Ginger Buttermilk', calories: 80, qty: '200 Gms' },
+  { meal: 'lunch', name: 'Boiled Egg', calories: 78, qty: '1 No' },
+  { meal: 'lunch', name: 'Small Onion Thuvaiyal', calories: 114, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Banana', calories: 90, qty: '1 No' },
+  // Annalakshmi Lunch (12.00–03.00 PM)
+  { meal: 'lunch', name: 'Chapathi', calories: 70, qty: '1 No' },
+  { meal: 'lunch', name: 'Paneer Methi Chaman', calories: 111, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Achari Kabuli Channa Pulao', calories: 113, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Onion Raitha', calories: 67, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Plain Rice', calories: 113, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Sundakai Vatha Kuzhambu', calories: 70, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Paruppu Rasam', calories: 59, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Vazhakkai Podi Curry', calories: 105, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Keerai Kootu', calories: 75, qty: '100 Gms' },
+  { meal: 'lunch', name: 'Appalam', calories: 99, qty: '1 No' },
+  { meal: 'lunch', name: 'Paruppu Payasam', calories: 168, qty: '100 Gms' },
+  // Dinner (07.00–10.30 PM)
+  { meal: 'dinner', name: 'Poori', calories: 107, qty: '1 No' },
+  { meal: 'dinner', name: 'Kaldosa', calories: 78, qty: '1 No' },
+  { meal: 'dinner', name: 'White Rice', calories: 113, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Jeera Rasam', calories: 52, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Chapathi', calories: 70, qty: '1 No' },
+  { meal: 'dinner', name: 'Idli', calories: 60, qty: '1 No' },
+  { meal: 'dinner', name: 'Ghee Dosa', calories: 174, qty: '1 No' },
+  { meal: 'dinner', name: 'Nombu Kanji', calories: 378, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Dosa', calories: 120, qty: '1 No' },
+  { meal: 'dinner', name: 'Boiled Egg', calories: 78, qty: '1 No' },
+  { meal: 'dinner', name: 'Curd', calories: 58, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Veg Jal Spicy Gravy', calories: 112, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Omelette', calories: 94, qty: '1 No' },
+  { meal: 'dinner', name: 'Potato Masala', calories: 99, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Appalam', calories: 99, qty: '1 No' },
+  { meal: 'dinner', name: 'Sambar', calories: 60, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Garlic Rice', calories: 153, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Toor Dal Chutney', calories: 149, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Coconut Chutney', calories: 120, qty: '100 Gms' },
+  { meal: 'dinner', name: 'Brinjal Kara Curry', calories: 115, qty: '100 Gms' },
+]
+
 // ---------- Saturday / Sunday (limited — placeholders, share real menus to refine) ----------
 const SATURDAY: MenuItem[] = [
   { meal: 'snack', name: 'Sukku Tea', calories: 35, qty: '200 Gms' },
@@ -166,7 +218,7 @@ const BY_DAY: Record<number, { items: MenuItem[]; note?: string }> = {
   2: { items: TUESDAY }, // Tuesday — exact
   3: { items: THURSDAY, note: 'default — share Wednesday menu to set exactly' },
   4: { items: THURSDAY }, // Thursday — exact
-  5: { items: THURSDAY, note: 'default — share Friday menu to set exactly' },
+  5: { items: FRIDAY, note: 'breakfast from Thursday — share Friday breakfast to set exactly' },
   6: { items: SATURDAY, note: 'Saturday · limited menu' },
 }
 

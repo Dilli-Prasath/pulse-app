@@ -138,12 +138,14 @@ export function foodRole(name: string): Role {
   if (/rasam|kuzhambu/.test(n)) return 'accompaniment' // before drinks ("jeera rasam") — eaten over a base, not alone
   if (/tea|coffee|\bmilk\b|buttermilk|juice|lemonade|jaljeera|jeera|lassi/.test(n)) return 'drink'
   if (/podi\s*(dosa|idli|uttapam)/.test(n)) return 'base' // a dosa dusted with podi, not the podi itself
+  if (/podi\s*(curry|fry|poriyal)/.test(n)) return 'veg' // veg tossed in podi ("Vazhakkai Podi Curry")
+  if (/sadam|sadham|pulao|pulav/.test(n)) return 'base' // mixed rice ("Sambar Sadam", "Channa Pulao") is the base
   if (/chutney|thuvaiyal|thogayal|thokku|pickle|appalam|papad|malli|podi/.test(n)) return 'accompaniment'
   if (/egg|omelette|omlet|paneer|chicken|fish|mutton|prawn/.test(n)) return 'protein'
-  if (/\bdal\b|dall|sambar|sambhar|rajma|chana|channa|\bgram\b|peas|moong|toor|kootu/.test(n)) return 'protein'
+  if (/\bdal\b|dall|sambar|sambhar|rajma|chana|channa|sundal|mochai|\bgram\b|peas|moong|toor|kootu/.test(n)) return 'protein'
   if (/sagu|kurma|korma/.test(n)) return 'veg' // gravy side served with poori/chapathi
-  if (/idli|dosa|kaldosa|poori|puri|chapathi|chapati|roti|naan|rice|pongal|upma|koozh|kanji|kanchi|porridge|biryani|paratha|uttapam|bread|fermented|macaroni|macroni|pasta|noodles/.test(n)) return 'base'
-  if (/poriyal|masala|aloo|potato|beetroot|cabbage|cauliflower|sabzi|sabji|\bveg\b/.test(n)) return 'veg'
+  if (/idli|dosa|kaldosa|poori|puri|chapathi|chapati|roti|naan|rice|pongal|upma|koozh|kanji|kanchi|porridge|biryani|paratha|uttapam|bread|fermented|macaroni|macroni|pasta|noodles|sevai|semiya|idiyappam|pav bun|\bbun\b/.test(n)) return 'base'
+  if (/poriyal|masala|aloo|potato|beetroot|cabbage|cauliflower|brinjal|kathirikai|bhindi|ladies finger|kara curry|sabzi|sabji|\bveg\b/.test(n)) return 'veg'
   if (/banana|guava|muskmelon|melon|apple|orange|fruit|grape|papaya|pomegranate|pineapple|sapota|chikoo|pear\b/.test(n)) return 'fruit'
   if (/vada|suzhiyam|boondhi|bajji|bonda|pakoda/.test(n)) return 'fried'
   return 'other'
@@ -153,7 +155,12 @@ interface Cand { it: MenuItem; protein: number; carbs: number; fat: number; role
 function enrich(items: MenuItem[]): Cand[] {
   return items.map((it) => {
     const a = analyzeFood(it.name, it.calories)
-    return { it, role: foodRole(it.name), protein: a.macros.protein, carbs: a.macros.carbs, fat: a.macros.fat, score: a.score, band: a.band }
+    // energy density: 378 kcal/100 g (nombu kanji, lemon sevai) fills a budget fast and leaves you hungry —
+    // nudge the plate toward lighter options; per-piece items are judged by the analyser alone
+    const q = itemQty(it)
+    const per100 = q.unit === 'g' ? (it.calories / q.n) * 100 : 0
+    const score = Math.max(0, a.score - (per100 > 330 ? 20 : per100 > 250 ? 10 : 0))
+    return { it, role: foodRole(it.name), protein: a.macros.protein, carbs: a.macros.carbs, fat: a.macros.fat, score, band: a.band }
   })
 }
 
